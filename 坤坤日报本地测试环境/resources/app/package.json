@@ -1,0 +1,11 @@
+{
+  "name": "todo-daily",
+  "version": "3.0.2",
+  "description": "坤坤日报 · 练习室",
+  "main": "main.js",
+  "updateUrl": "https://raw.githubusercontent.com/real-kunkun/RealIKUN/main/version.json",
+  "devDependencies": {
+    "@electron/asar": "^3.2.0",
+    "electron": "^44.0.0"
+  }
+}
