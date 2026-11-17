@@ -1,0 +1,13 @@
+{
+  "version": "3.0.2",
+  "notes": "- 个人计划重新设计了一下，听取了我儿子的意见。\n- 右侧展示栏加了久坐提醒，日历加了节假日、农历和天气，加了节日倒计时，牛马生活更有盼头。\n- 统计卡片换了样式，只做展示。\n- 坤哥提醒你活动下还有好听的音乐哦！曼波波波！\n- 脑细胞在快速燃烧，先偷懒一会儿。",
+  "downloadUrl": "https://github.com/real-kunkun/RealIKUN/releases",
+  "publishedAt": "2026-11-17",
+  "url": "https://kunkundaily-1533457423.cos.ap-shanghai.myqcloud.com/kunkun-daily-3.0.2.7z",
+  "mirrors": [
+    "https://github.com/real-kunkun/RealIKUN/releases/download/v3.0.2/kunkun-daily-3.0.2.7z",
+    "https://gh-proxy.com/https://github.com/real-kunkun/RealIKUN/releases/download/v3.0.2/kunkun-daily-3.0.2.7z",
+    "https://ghproxy.net/https://github.com/real-kunkun/RealIKUN/releases/download/v3.0.2/kunkun-daily-3.0.2.7z"
+  ],
+  "sha256": "7bde4a7fcb366755c5a8dbbfff1c102d436e3a32216a1a6e3dcb059bc5df6f4c"
+}
