@@ -2,9 +2,9 @@
 // 坤坤日报 3.0.0 主进程
 //
 // 与 2.x 的差别：
-//   · 界面换成「练习室」，数据结构见 data-layer.js（v7）
-//   · 删除：起身(久坐)提醒、下班提醒、日间/夜间模式、导出导入
-//   · 保留：无边框窗口/拖拽/贴边、托盘、开机自启、关窗后台、检查更新
+//   · 界面换成「练习室」，数据结构见 data-layer.js（v8）
+//   · 删除：下班提醒、日间/夜间模式、导出导入
+//   · 保留：无边框窗口/拖拽/贴边、托盘、开机自启、关窗后台、检查更新、久坐起身提醒
 //   · 更新改为 GitHub 单包：下载 → 解压覆盖 → 重启，并保证桌面图标存在
 // ═══════════════════════════════════════════════════════
 const { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, shell, screen, net, dialog } = require('electron');
@@ -145,12 +145,29 @@ function reportUpdateRollback() {
 }
 
 // 清理历史更新残留：进程被强杀时 temp 里会留下上百 MB 的解压目录
+// 注意：刚更新完重启的那一次，批处理还在用 %TEMP%\kk-update-<ts> 里的 bak/ext 目录
+// （启动成功后它才收尾，失败时还要拿 bak 回滚）。所以这里只清「30 分钟以前」的，
+// 不能一上来就全删 —— 否则新版启动瞬间就把回滚备份删了，更新失败就救不回来。
 function cleanStaleUpdateDirs() {
   try {
     const tmp = app.getPath('temp');
+    const now = Date.now();
     for (const name of fs.readdirSync(tmp)) {
       if (!/^kk-update-\d+$/.test(name)) continue;
-      try { fs.rmSync(path.join(tmp, name), { recursive: true, force: true }); } catch (e) { }
+      const dir = path.join(tmp, name);
+      try {
+        const st = fs.statSync(dir);
+        let stamp = st.mtimeMs;
+        /* 真正能说明「批处理正在用这里」的是 bak/ 目录的创建时间：
+           更新包可能下载了很久，外层 kk-update-* 早就建好了，但 bak 是批处理
+           启动后才现建的，用它判断才不会把还在回滚用的备份当垃圾删掉。 */
+        try {
+          const b = fs.statSync(path.join(dir, 'bak'));
+          if (b.mtimeMs > stamp) stamp = b.mtimeMs;
+        } catch (e) { }
+        if (now - stamp < 30 * 60 * 1000) continue;
+        fs.rmSync(dir, { recursive: true, force: true });
+      } catch (e) { }
     }
   } catch (e) { }
 }
@@ -158,6 +175,32 @@ function cleanStaleUpdateDirs() {
 // 统一读 JSON：兼容记事本保存时写入的 UTF-8 BOM
 function readJson(p) {
   return JSON.parse(fs.readFileSync(p, 'utf8').replace(/^\uFEFF/, ''));
+}
+
+// ── 自动检查更新的节奏 ──────────────────────────────────
+// 用户定的规则：① 每天只静默查一次（不是每次启动都查）；
+//             ② 点了「先不更新」就不再提示这个版本，手动点「开团」仍能查出来。
+// 状态单独放一个小文件，不塞进 todo-data.json —— 它属于「程序状态」而不是用户数据，
+// 不该跟着数据一起被备份/迁移，也不该让渲染层有机会改它。文件坏了就自愈成空对象。
+const UPDATE_STATE_FILE = path.join(DATA_DIR, 'update-state.json');
+function readUpdateState() {
+  try {
+    if (!fs.existsSync(UPDATE_STATE_FILE)) return {};
+    const o = readJson(UPDATE_STATE_FILE);
+    return (o && typeof o === 'object' && !Array.isArray(o)) ? o : {};
+  } catch (e) {
+    return {};
+  }
+}
+function writeUpdateState(patch) {
+  try {
+    const next = Object.assign(readUpdateState(), patch || {});
+    fs.writeFileSync(UPDATE_STATE_FILE, JSON.stringify(next, null, 2), 'utf8');
+    return next;
+  } catch (e) {
+    writeCrashLog('writeUpdateState', e);
+    return null;
+  }
 }
 
 // ── 数据层 ──────────────────────────────────────────────
@@ -377,7 +420,12 @@ function createWindow(hidden) {
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-      nodeIntegration: false
+      nodeIntegration: false,
+      /* 窗口收进托盘 / 切到别的应用时，Chromium 默认把渲染层定时器节流到每分钟一次。
+         久坐倒计时、天气自动刷新都挂在渲染层的定时器上，被节流后数字就不动了，
+         用户会以为「后台不计时」。这里关掉节流：代价只是后台每秒一次极轻的 DOM 更新，
+         换来倒计时始终准确。（主进程的 suTick 本来就不受这个影响。） */
+      backgroundThrottling: false
     }
   });
 
@@ -847,7 +895,10 @@ async function runOneClickUpdate(onProgress) {
 
     if (onProgress) onProgress({ phase: 'unzip', pct: 100 });
 
-    const installDir = DATA_DIR;                       // exe 所在目录
+    /* 必须用 INSTALL_DIR（exe 所在目录），不能用 DATA_DIR：
+       DATA_DIR 在「安装目录不可写」时会退回 userData，那样批处理会把新版覆盖到
+       用户数据目录去，真正的程序目录一个文件都不动 —— 更新必然失败，还会污染数据。 */
+    const installDir = INSTALL_DIR;
     const exeName = path.basename(process.execPath);
     const batPath = path.join(workDir, 'update.bat');
     fs.writeFileSync(batPath, buildUpdateBat(), 'ascii');
@@ -1079,8 +1130,21 @@ function registerIpc() {
     if (LOCAL_TEST) return { ok: false, reason: 'local-test' };
     if (!UPDATE_URL) return { ok: false, reason: 'no-url' };
     const r = await checkForUpdate(UPDATE_URL, APP_VERSION, 6000);
-    if (r && r.ok && r.hasUpdate) latestRemoteInfo = r.info;
+    if (r && r.ok) {
+      if (r.hasUpdate) latestRemoteInfo = r.info;
+      // 手动查过也算「今天查过了」：免得刚关掉弹窗，几秒后自动检查又推一遍
+      writeUpdateState({ lastCheck: fmtDate(new Date()) });
+    }
     return r;
+  });
+
+  /* 「先不更新」：记住这个版本，之后自动检查不再为它弹窗。
+     不清 skipVersion —— 下次真有更新版本时版本号不同，自然又会提示。 */
+  ipcMain.handle('skip-update', (e, version) => {
+    const v = String(version || '').trim();
+    if (!/^\d+(\.\d+){0,3}$/.test(v)) return { ok: false, error: 'bad-version' };
+    const st = writeUpdateState({ skipVersion: v });
+    return { ok: !!st, skipVersion: v };
   });
 
   ipcMain.handle('one-click-update', async () => {
@@ -1276,19 +1340,27 @@ if (!gotLock) {
       }
     } catch (e) { }
 
-    // 启动后延迟静默查一次更新：不卡启动、失败无声，发现新版本才推给界面
+    /* 启动后延迟静默查一次更新：不卡启动、失败无声，发现新版本才推给界面。
+       两个闸门：① 今天已经查过就跳过（每天一次，不是每次开窗都查）；
+                ② 用户点过「先不更新」的那个版本不再推（仍可手动「开团」查）。
+       只有查成功才记下今天的日期 —— 断网那一次不算，下次启动还会再试。 */
     try {
       if (!LOCAL_TEST && UPDATE_URL) {
-        setTimeout(() => {
-          checkForUpdate(UPDATE_URL, APP_VERSION, 5000).then((r) => {
-            if (r && r.ok && r.hasUpdate) {
+        const today = fmtDate(new Date());
+        if (readUpdateState().lastCheck !== today) {
+          setTimeout(() => {
+            checkForUpdate(UPDATE_URL, APP_VERSION, 5000).then((r) => {
+              if (!r || !r.ok) return;
+              const st = writeUpdateState({ lastCheck: fmtDate(new Date()) }) || {};
+              if (!r.hasUpdate || !r.info || !r.info.version) return;
+              if (st.skipVersion && st.skipVersion === r.info.version) return;
               latestRemoteInfo = r.info;
               if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.webContents.send('update-available', r.info);
               }
-            }
-          }).catch(() => { });
-        }, 3500);
+            }).catch(() => { });
+          }, 3500);
+        }
       }
     } catch (e) { writeCrashLog('update-auto-check', e); }
 

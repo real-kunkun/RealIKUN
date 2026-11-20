@@ -369,14 +369,16 @@ const MIGRATIONS = {
       data.ideas = [];
       data.seeded = out.length > 0;   // 老用户升级后不灌演示数据
 
-      // 2.x 的两个设置项跟着搬过来（其余 2.x 设置项随功能一起下线）
+      // 2.x 的两个设置项跟着搬过来（其余 2.x 设置项随功能一起下线）。
+      // 注意用 merge 而不是整个替换：baseNormalize 已经先跑过，里面带着
+      // seenVersion / standup 这些新字段，直接覆盖会让它们退回默认值。
       const rs = isObj(src.reminderSettings) ? src.reminderSettings : {};
       const cb = isObj(src.closeBehavior) ? src.closeBehavior : {};
-      data.settings = {
-        motion: true,
+      data.settings = Object.assign({}, data.settings, {
+        motion: data.settings.motion !== false,
         autoStart: rs.autoStart === true,
         keepRunning: cb.keepRunning === true
-      };
+      });
 
       ctx.stats.migratedReports = out.length;
       ctx.stats.skippedReports = skippedEmpty;

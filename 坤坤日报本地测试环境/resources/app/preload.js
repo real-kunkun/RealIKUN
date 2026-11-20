@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 // 渲染层唯一的数据/系统通道。3.0.0 起不再有主题、导出接口；
-// 久坐提醒在 3.2 重新补回，通道见下方 standup*。
+// 久坐提醒在 3.0.1 重新补回，通道见下方 standup*。
 contextBridge.exposeInMainWorld('todoAPI', {
   // 应用版本号（唯一来源 package.json）
   appVersion: (() => { try { return ipcRenderer.sendSync('boot-version'); } catch (e) { return ''; } })(),
@@ -29,9 +29,10 @@ contextBridge.exposeInMainWorld('todoAPI', {
   musicAdd: (paths) => ipcRenderer.invoke('music-add', paths),
   musicOpen: () => ipcRenderer.invoke('music-open'),
 
-  // 升级检测：手动检查 / 打开外链 / 下载安装包并覆盖更新
+  // 升级检测：手动检查 / 打开外链 / 下载安装包并覆盖更新 / 「先不更新」记住版本
   checkUpdate: () => ipcRenderer.invoke('check-update'),
   startUpdate: () => ipcRenderer.invoke('one-click-update'),
+  skipUpdate: (version) => ipcRenderer.invoke('skip-update', version),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (e, payload) => callback(payload)),
   onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (e, payload) => callback(payload))

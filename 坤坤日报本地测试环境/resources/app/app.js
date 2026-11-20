@@ -6,27 +6,36 @@ var S={todos:[],ideas:[],habits:[],books:[],curBook:0,readDays:{},ledger:[],mood
        planDays:{},goalLog:[],lastPlanDay:''};
 var $=function(s,r){return (r||document).querySelector(s);};
 var ce=function(t,c){var e=document.createElement(t);if(c)e.className=c;return e;};
-/* 保存节流：界面上连续操作（拖拽、连点）只落一次盘 */
-var saveTimer=null,saveInFlight=false;
+/* 保存节流：界面上连续操作（拖拽、连点）只落一次盘。
+   落盘是异步的：写盘期间又改了数据不能直接丢掉（以前会丢，最后一下改动要等
+   下一次 save 或关窗才落盘），改成「标记 dirty，写完立刻补一次」。 */
+var saveTimer=null,saveInFlight=false,saveDirty=false;
 function persist(){
   if(!api||!api.saveData)return;
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(function(){
-    if(saveInFlight)return;
-    saveInFlight=true;
-    try{
-      var p=api.saveData(JSON.parse(JSON.stringify(S)));
-      if(p&&p.then)p.then(function(){saveInFlight=false;},function(){saveInFlight=false;});
-      else saveInFlight=false;
-    }catch(e){saveInFlight=false;}
-  },120);
+  saveTimer=setTimeout(flushSave,120);
+}
+function flushSave(){
+  if(!api||!api.saveData)return;
+  if(saveInFlight){saveDirty=true;return;}
+  saveInFlight=true;
+  var settled=function(){
+    saveInFlight=false;
+    if(saveDirty){saveDirty=false;flushSave();}
+  };
+  try{
+    var p=api.saveData(JSON.parse(JSON.stringify(S)));
+    if(p&&p.then)p.then(settled,settled);
+    else settled();
+  }catch(e){settled();}
 }
 function save(){updateStatCard();persist();}
 
 /* ═══ v8 计划/目标历史：跨天归档 ═══════════════════════════
    启动时（以及跨零点后每分钟）检查：把上次归档日的计划与目标各存一份快照。
    今日任务：已完成的移出轨道，未完成的顺延到今天；
-   阶段性任务：长期项，不移动不清除，只按天存状态快照（可查某天有哪些目标、完成到哪一步）；
+   阶段性任务：长期项，不移动不清除，快照照常写（planDays[k].goals 保留，
+   兼容 3.0.1 老数据；历史页 11-19 起改读 goalLog 事件流水，不再展示快照）。
    多天没打开时，中间几天没有快照 —— 文件里只有最后状态，不伪造历史。 */
 function rollPlanDay(){
   if(!S.planDays||typeof S.planDays!=='object')S.planDays={};
@@ -75,30 +84,38 @@ function planHistoryHTML(focusDay){
   });
   return n?h:'<div class="s-empty">还没有计划历史 · 从明天起，今天的计划会自动归档 📂</div>';
 }
+/* 目标事件日期：goalLog 的 ts → 'YYYY.MM.DD'。事件流水里日期是「事情发生的那天」，
+   跟快照的「这是哪天的存档」是两回事 —— 前者对长期目标才有意义。 */
+function goalEventDay(ts){
+  var d=new Date(ts);
+  if(isNaN(d.getTime()))return '';
+  return d.getFullYear()+'.'+two(d.getMonth()+1)+'.'+two(d.getDate());
+}
+/* 11-19 用户定：阶段性任务没有「某一天完成」的概念，按天快照只是把同一批目标
+   印 N 遍，日期和完成率都没意义。改成事件流水 —— 哪天加了、完成、取消、删了。
+   数据源是 goalLog（每次操作都记，带时间戳）；planDays.goals 照常写入不删除，
+   老用户已有的快照仍留在文件里，只是不再展示。goalLog 为空就是空态，不伪造记录。 */
+var GOAL_ACT={added:'加入',done:'完成',undone:'取消完成',removed:'删掉'};
 function goalHistoryHTML(focusDay){
-  var keys=Object.keys(S.planDays||{}).sort().reverse(),h='',n=0;
-  keys.forEach(function(k){
-    var d=S.planDays[k],gs=d.goals||[];if(!gs.length)return;
-    n++;
-    h+='<div class="ph-day'+(k===focusDay?' focus':'')+'" data-day="'+k+'">'+
-      '<div class="ph-h"><b>'+esc(k)+'</b><span>'+(d.goalDone||0)+' / '+(d.goalTotal||gs.length)+' 已完成</span></div>';
-    ['short','mid','long'].forEach(function(hz){
-      var sub=gs.filter(function(g){return g.hor===hz;});
-      if(!sub.length)return;
-      h+='<div class="ph-grp"><em>'+({short:'短期',mid:'中期',long:'长期'}[hz])+'</em><ul>';
-      sub.forEach(function(g){
-        var fin=g.done?goalDoneDate(g.t):'';
-        h+='<li class="'+(g.done?'done':'')+'">'+(g.done?'✓':'○')+' '+esc(g.t)+
-          (fin?'<i>完成于 '+fin+'</i>':'')+(g.note?'<i>'+esc(g.note)+'</i>':'')+'</li>';
-      });
-      h+='</ul></div>';
-    });
-    h+='</div>';
+  var logs=(S.goalLog||[]).slice().sort(function(a,b){return b.ts-a.ts;});
+  if(!logs.length)return '<div class="s-empty">还没有阶段性任务记录 · 新增或完成目标后，这里会记上一笔 🎯</div>';
+  var out='',groups={},days=[];
+  logs.forEach(function(g){
+    var k=goalEventDay(g.ts);if(!k)return;
+    if(!groups[k]){groups[k]=[];days.push(k);}
+    groups[k].push(g);
   });
-  if(!n)h='<div class="s-empty">还没有目标历史 · 从明天起，每天的目标状态会自动归档 🎯</div>';
-  /* 11-17 用户定：底部那块「目标动态」（目标新增/完成/删除的流水）整块去掉。
-     goalLog 仍然照常记录 —— goalDoneDate() 要靠它算「完成于 X 月 X 日」。 */
-  return h;
+  days.forEach(function(k){
+    out+='<div class="ph-day'+(k===focusDay?' focus':'')+'" data-day="'+k+'">'+
+      '<div class="ph-h"><b>'+esc(k)+'</b><span>'+groups[k].length+' 笔</span></div><ul>';
+    groups[k].forEach(function(g){
+      var act=GOAL_ACT[g.action]||'记了一笔';
+      /* 方向一：不再区分短/中/长期，历史事件统一显示「长期目标」。 */
+      out+='<li class="gl-ev gl-'+esc(g.action)+'"><em>'+act+'</em> '+esc(g.t)+'<i>长期目标</i></li>';
+    });
+    out+='</ul></div>';
+  });
+  return out||'<div class="s-empty">还没有长期目标记录 · 新增或完成目标后，这里会记上一笔 🎯</div>';
 }
 function historyPaneHTML(tab,focusDay){
   return tab==='goals'?goalHistoryHTML(focusDay):planHistoryHTML(focusDay);
@@ -106,8 +123,8 @@ function historyPaneHTML(tab,focusDay){
 function openPlanHistory(focusDay,tab){
   tab=tab||'plan';
   openModal('历史档案',{view:true,viewHtml:
-    '<div class="ph-tabs"><button class="ph-tab'+(tab==='plan'?' on':'')+'" data-tab="plan" type="button">今日任务</button>'+
-    '<button class="ph-tab'+(tab==='goals'?' on':'')+'" data-tab="goals" type="button">阶段性任务</button></div>'+
+    '<div class="ph-tabs"><button class="ph-tab'+(tab==='plan'?' on':'')+'" data-tab="plan" type="button">今日待办</button>'+
+    '<button class="ph-tab'+(tab==='goals'?' on':'')+'" data-tab="goals" type="button">长期目标</button></div>'+
     '<div class="plan-hist" id="phPane">'+historyPaneHTML(tab,focusDay)+'</div>'+
     '<div class="ph-acts"><button class="jview-btn neutral" type="button" id="phClose">关闭</button></div>'});
   modalBox.classList.add('hist');
@@ -222,7 +239,14 @@ function cleanLegacyDemo(){
   return true;   /* 标记本身也要落盘，所以无论是否真删了东西都要 save 一次 */
 }
 
-function esc(s){return (s||'').replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c];});}
+/* HTML 转义：引号也要转 —— 这个函数的输出还会出现在 title="..." 这类属性里，
+   名字里带一个半角引号就能把属性截断（排版错乱，极端情况还能注入标签）。
+   非字符串（数字 / null）统一先转字符，别让 .replace 抛错。 */
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
 
 /* 视图切换 + 入场动画重播。
    旧实现用 `void vb.offsetWidth` 强制同步布局来重启动画，每次切视图都会卡一帧；
@@ -246,9 +270,21 @@ var TRASH_SVG='<svg class="trash-svg" viewBox="0 -10 64 74" aria-hidden="true">'
     '<rect class="trash-lid" x="12" y="12" width="40" height="6" rx="2" ry="2"/>'+
     '<rect class="trash-lid" x="26" y="8" width="12" height="4" rx="2" ry="2"/>'+
   '</g></svg>';
-var KLAB={imp:["重要","imp"],daily:["日常","daily"],heavy:["高重","heavy"]};
+var KLAB={imp:["重要","imp"],daily:["日常","daily"],heavy:["重点","heavy"]};
+/* FLIP 补位用的稳定 id：挂在 it 对象上（WeakMap），不写进存储 —— 3.0.1 老用户的数据文件一字节不动。
+   重排前后靠它认出「同一张卡」，才能算出该从哪儿滑到哪儿。 */
+var _todoIds=new WeakMap(),_todoIdSeq=0;
+function todoId(it){if(!_todoIds.has(it))_todoIds.set(it,'c'+(++_todoIdSeq));return _todoIds.get(it);}
+/* 备注空态文案 + 背面标签行的铅笔按钮（手写内联 SVG，墨黑描边 / 纸色实色 / 硬投影）。
+   11-18 补：原来备注只能在「新增待办」时填一次，没填就再也没有入口 —— 现在背面随时能补写。 */
+var NOTE_EMPTY='这条还没写备注，回来补一笔。';
+var NOTE_SVG='<svg viewBox="0 0 24 24" aria-hidden="true">'+
+  '<path d="M4.5 19.5h4l10-10a2.1 2.1 0 0 0 0-3l-1-1a2.1 2.1 0 0 0-3 0l-10 10v4z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>'+
+  '<path d="M14.8 7.2l3 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>'+
+  '</svg>';
 function tcard(it){
   var c=ce('div','tcard'+(it.done?' done':''));
+  c.dataset.cid=todoId(it);
   var k=KLAB[it.k]||KLAB.daily;
   c.innerHTML='<div class="flip-inner">'+
       '<div class="flip-face flip-front">'+
@@ -257,8 +293,9 @@ function tcard(it){
         '<button class="del trash-btn" type="button" title="删除" aria-label="删除这条">'+TRASH_SVG+'</button>'+
       '</div>'+
       '<div class="flip-face flip-back">'+
-        '<div class="bk-label">NOTE / 备注</div>'+
-        '<div class="bk-note">'+esc(it.note||'这条还没写备注，回来补一笔。')+'</div>'+
+        '<div class="bk-label"><span>NOTE / 备注</span>'+
+          '<button class="bk-edit" type="button" title="写备注" aria-label="给这条写备注">'+NOTE_SVG+'</button></div>'+
+        '<div class="bk-note">'+esc(it.note||NOTE_EMPTY)+'</div>'+
         '<div class="bk-status"><span class="st-do">○ 进行中</span><span class="st-done">● 已完成</span></div>'+
       '</div>'+
     '</div>';
@@ -269,16 +306,24 @@ function tcard(it){
   back.inert=true;
   function flip(on){c.classList.toggle('flipped',on);front.inert=on;back.inert=!on;}
   c.addEventListener('click',function(e){
-    if(e.target.closest('.hold-btn')||e.target.closest('.del'))return;
+    if(e.target.closest('.hold-btn')||e.target.closest('.del')||e.target.closest('.bk-edit'))return;
     flip(!c.classList.contains('flipped'));
   });
   c.querySelector('.del').addEventListener('click',function(e){e.stopPropagation();confirmDelete('确定删除这条吗？',function(){
     if(it.hor!=='today')logGoal(it.t,it.hor,'removed');
     S.todos=S.todos.filter(function(x){return x!==it;});save();renderTodos();paintHolidayCard();});});
+  /* 背面铅笔：补写 / 修改备注。不重渲染整张卡（会翻回正面、重播入场动画），
+     只改这一个文本节点；数据 save() 走同一条节流落盘路径。 */
+  var editBtn=c.querySelector('.bk-edit');
+  if(editBtn)editBtn.addEventListener('click',function(e){
+    e.stopPropagation();
+    openModal(it.note?'改备注':'写备注',{area:true,onlyArea:true,ph:'给这条补一句备注…',ctx:{type:'note',it:it,card:c}});
+    modalArea.value=it.note||'';
+    setTimeout(function(){modalArea.focus();},40);
+  });
   return c;
 }
 function updateStats(){
-  $('#footIdea').textContent=S.ideas.length;
   $('#ideaCnt').textContent=S.ideas.length+' 张';
   paintHolidayCard();updateStatCard();
 }
@@ -305,20 +350,87 @@ function paintPage(tr,carousel,pg){
     if(next)next.disabled=pg.page>=pg.pages-1;
   }
 }
+/* 11-19 用户定：完成的任务自动沉到末尾，未完成的挤到前面，任务多时不用翻页找。
+   只在渲染层排序 —— 不改 S.todos 的存储顺序，3.0.1 老用户的数据文件一字节不动。
+   filter 返回新数组，sort 不会污染原数据；同组内保持原有先后（V8 稳定排序）。 */
+function byDone(a,b){return (a.done?1:0)-(b.done?1:0);}
+/* 11-20 方向一：两个池子取代「今日 / 短·中·长」。
+   今日待办 = hor==='today'；长期目标 = 其余所有 hor（老数据的 short/mid/long 自动归位，
+   一个字节都不用迁移）。边界只在这里定义一次，渲染/翻页/新增都复用。 */
+function todayTodos(){return S.todos.filter(function(x){return x.hor==='today';}).sort(byDone);}
+function goalTodos(){return S.todos.filter(function(x){return x.hor!=='today';}).sort(byDone);}
+/* FLIP 补位：手机桌面删 App 的观感 —— 一张卡消失后，后面的卡平滑滑到新位置。
+   原理：重排前记下每张卡的位置（First），重排后用 WAAPI 把它从旧位置 translate 回新位置（Last→Invert→Play）。
+   只动 transform，不碰宽高/left，符合结构不变量；reduced-motion 直接跳过。 */
+function captureRects(tr){
+  var m={};
+  [].forEach.call(tr.querySelectorAll('.tcard'),function(c){
+    if(c.dataset.cid)m[c.dataset.cid]=c.getBoundingClientRect();
+  });
+  return m;
+}
+/* delayPlay：>0 时先把卡片 invert 到旧位置「按住不动」，等这么久再 play 滑到新位置。
+   用来实现「卡片跳跃完成后，后面的才开始补位」——DOM 顺序已重排正确，只是视觉上先定住。
+   返回一个 play 函数供需要时提前触发。 */
+function reorderWithFlip(tr,first,skipCid,delayPlay){
+  if(!tr){renderTodos();return function(){};}
+  var noAnim=document.body.classList.contains('no-motion')||
+    (window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+  if(noAnim||!first){renderTodos();return function(){};}
+  renderTodos();   /* 重建轨道；tr 元素本身不变，只是 innerHTML 换了 */
+  var moves=[],doneCard=null;
+  [].forEach.call(tr.querySelectorAll('.tcard'),function(c){
+    if(c.dataset.cid===skipCid){doneCard=c;return;} /* 刚完成的卡不滑：它走自己的淡出/入场 */
+    var f=first[c.dataset.cid];
+    if(!f)return;                                  /* 从下一页补进来的新卡：交给 rise 淡入 */
+    var l=c.getBoundingClientRect();
+    var dx=f.left-l.left,dy=f.top-l.top;
+    if(Math.abs(dx)<1&&Math.abs(dy)<1)return;
+    moves.push({c:c,dx:dx,dy:dy});
+  });
+  var played=false;
+  function play(){
+    if(played)return;played=true;
+    moves.forEach(function(m){
+      /* opacity:1 盖住 .tcard 的 rise 入场（否则旧卡重排时会闪一下淡入）；
+         WAAPI 优先级高于 CSS animation，transform 也一并接管。 */
+      m.c.animate([
+        {transform:'translate('+m.dx+'px,'+m.dy+')',opacity:1},
+        {transform:'translate(0,0)',opacity:1}
+      ],{duration:380,easing:'cubic-bezier(.22,1,.36,1)'});
+    });
+  }
+  if(delayPlay>0){
+    /* 先定在旧位置：用 fill:forwards 的瞬时动画把 invert 状态钉住，直到 play 时取消 */
+    moves.forEach(function(m){
+      m.hold=m.c.animate(
+        [{transform:'translate('+m.dx+'px,'+m.dy+')',opacity:1},
+         {transform:'translate('+m.dx+'px,'+m.dy+')',opacity:1}],
+        {duration:100000,fill:'forwards'});
+    });
+    /* 刚完成的卡已在重排后出现在新位置（末尾），但幽灵还在原位播跳跃 ——
+       此刻页面会有两张同一张卡。先把它藏起来，play 时再淡入，避免「排序和跳跃叠在一起」。 */
+    if(doneCard)doneCard.style.visibility='hidden';
+    var oldPlay=play;
+    play=function(){
+      if(played)return;
+      moves.forEach(function(m){if(m.hold){m.hold.cancel();m.hold=null;}});
+      if(doneCard){doneCard.style.visibility='';}
+      oldPlay();
+    };
+    setTimeout(play,delayPlay);
+  }else play();
+  return play;
+}
 function renderTodos(){
   var tr=$('#todayTrack');
-  if(tr){
-    var list=S.todos.filter(function(x){return x.hor==='today';});
-    paintPage(tr,tr.closest('.carousel'),pageOf(list,'today'));
-  }
+  if(tr)paintPage(tr,tr.closest('.carousel'),pageOf(todayTodos(),'today'));
   renderHorTodos();
   updateStats();
 }
-var curHor='short';
 function renderHorTodos(){
   var tr=$('#horTrack');if(!tr)return;
-  var list=S.todos.filter(function(x){return x.hor===curHor;});
-  paintPage(tr,tr.closest('.carousel'),pageOf(list,'hor'));
+  paintPage(tr,tr.closest('.carousel'),pageOf(goalTodos(),'hor'));
 }
 /* 切当前 tab：today | hor。偏好不落盘（下次打开默认今日） */
 /* 历史页签内子视图：plan（今日任务历史）| goals（阶段性任务历史） */
@@ -339,17 +451,13 @@ function setTaskTab(tab,focusDay){
     b.classList.toggle('on',on);b.setAttribute('aria-selected',on?'true':'false');
   });
   document.querySelectorAll('.todo-panel').forEach(function(p){p.classList.toggle('on',p.dataset.panel===tab);});
-  /* 加号跟着页签走：历史页没有新增入口，藏起来但不摘掉占位；
-     短/中/长只在阶段性任务页有用，同样用 visibility 隐藏，保住两个按钮的位置不左右晃 */
+  /* 加号跟着页签走：历史页没有新增入口，藏起来但不摘掉占位。 */
   var add=document.querySelector('#taskAdd');
   if(add)add.style.visibility=(tab==='hist')?'hidden':'visible';
-  var seg=document.querySelector('.seg-slot');
-  if(seg)seg.classList.toggle('on',tab==='hor');
   if(tab==='hist'){inlineHistDay=focusDay||'';renderInlineHist();}
 }
-/* glider 是 CSS 里 1/3 等分宽的滑块，位置由 :checked 决定，不再需要 JS 量按钮宽度。
-   保留空函数是为了不惊动各处历史调用点。 */
-function placeTabSlider(){}
+/* glider 是 CSS 里 1/3 等分宽的滑块，位置完全由 :checked 决定，
+   不再需要 JS 量按钮宽度（旧的 placeTabSlider 是空函数，11-18 已删）。 */
 /* label 点击 → 对应 radio 的 change；键盘方向键切换也走 change。 */
 document.querySelectorAll('.todo-tabs input[type=radio]').forEach(function(r){
   r.addEventListener('change',function(){if(r.checked)setTaskTab(r.dataset.tab);});
@@ -358,9 +466,38 @@ function toggleTodo(it,card){
   it.done=!it.done;
   if(it.hor!=='today')logGoal(it.t,it.hor,it.done?'done':'undone');
   save();
-  if(card)card.classList.toggle('done',it.done);
   updateStats();
-  if(it.done&&card)showDoneBurst(card);
+  /* 这里刻意不 toggle done class：完成动画期间卡片保持原样停在原位，
+     外观更新等动画播完、重排后由 tcard 按 it.done 自然渲染，避免「已完成的卡还在前排」的中间态。 */
+  var tr=card?card.parentNode:null;
+  var grid=tr&&tr.classList.contains('task-grid')?tr:null;
+  var canAnim=!!(card&&card.animate&&grid&&
+    !document.body.classList.contains('no-motion')&&
+    !(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches));
+  if(it.done&&card&&canAnim){
+    /* 严格串行（用户 11-19 定）：①原卡上播小手星 + 跳跃，跳起→落回原位（820ms）；
+       ②落回后原卡缩小消失（280ms）；③消失完才重排 DOM + 其余卡 FLIP 补位。
+       排序动画绝不和跳跃重叠。
+       用独立 setTimeout 串联，不挂动画 onfinish —— replayViewAnim 的 cancel() 会吞掉 onfinish。
+       计时到点若卡片已不在轨道（切走/翻页重建了 DOM），直接 renderTodos 兜底。 */
+    showDoneBurst(card);                                /* 小手星 + 820ms 跳跃，在真实的原卡上 */
+    setTimeout(function(){
+      if(!grid.contains(card)){renderTodos();return;}
+      card.animate([
+        {transform:'scale(1)',opacity:1},
+        {transform:'scale(1.04)',opacity:1,offset:.3},
+        {transform:'scale(.68)',opacity:0}
+      ],{duration:280,easing:'cubic-bezier(.4,0,.7,1)',fill:'forwards'});
+      setTimeout(function(){
+        if(!grid.contains(card)){renderTodos();return;}
+        var first=captureRects(grid);                   /* 消失完、重排前，记录其余卡位置 */
+        reorderWithFlip(grid,first,todoId(it));
+      },290);
+    },850);
+  }else{
+    /* 取消完成 / 无动画环境：下一个 tick 重排，避免打断 installHold 收尾（phase/labels）。 */
+    setTimeout(function(){renderTodos();},0);
+  }
 }
 /* 长按完成：小手 + 星从卡片头上弹出，卡片抬一下、抖两抖再落回（不再弹底部 toast） */
 var HAND_SVG='<svg viewBox="0 0 24 24" aria-hidden="true">'+
@@ -643,7 +780,7 @@ function renderHabits(){
       var on=!!h.hist[dayKey(d)],cls=''+(on?' on':'')+(dayKey(d)===tdk?' td':'');
       return '<i class="'+cls+'" data-day="'+dayKey(d)+'" title="'+dayKey(d)+'">'+['一','二','三','四','五','六','日'][i]+'</i>';
     }).join('');
-    r.innerHTML='<div class="ico">'+h.ic+'</div>'+
+    r.innerHTML='<div class="ico">'+esc(h.ic)+'</div>'+
       '<div class="nm">'+esc(h.nm)+'<b>连续 '+st+' 天</b></div>'+
       '<div class="wstrip" title="本周打卡，点一下可补打">'+strip+'</div>'+
       '<button class="hdel" type="button" title="删除「'+esc(h.nm)+'」">✕</button>'+
@@ -677,8 +814,6 @@ function renderHabits(){
   });
   var rate=total?Math.round(got/total*100):0;
   $('#habCnt').textContent=todayN+' / '+S.habits.length;
-  $('#footHab').textContent=todayN+'/'+S.habits.length;
-  $('#habStreak').textContent=best;
   $('#habWeek').textContent=got+' / '+total;
   $('#habToday').textContent=todayN;
   $('#habBest').textContent=best+' 天';
@@ -700,7 +835,7 @@ function renderHabits(){
     S.habits.forEach(function(h){if(h.hist[dayKey(dd)])done.push(h.ic);});
     var wd=['日','一','二','三','四','五','六'][dd.getDay()];
     hist+='<div class="hist-row'+(done.length?'':' empty')+'"><span class="dt">'+(j===0?'今天':(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+wd)+
-      '</span><span class="em">'+(done.length?done.join(' '):'没练')+'</span><span class="n">'+done.length+'/'+S.habits.length+'</span></div>';
+      '</span><span class="em">'+(done.length?esc(done.join(' ')):'没练')+'</span><span class="n">'+done.length+'/'+S.habits.length+'</span></div>';
   }
   $('#habHist').innerHTML=hist;
 }
@@ -710,7 +845,9 @@ function renderBook(){
   var sh=$('#shelf');if(!sh)return;
   sh.innerHTML='';
   S.books.forEach(function(b){
-    var pct=Math.round(b.cur/b.total*100);
+    /* 总章数可能是 0（旧数据没填 / 用户跳过），除法会得到 NaN，
+       进度条宽度写成 "NaN%" 会整条失效，这里统一按 0% 处理 */
+    var pct=b.total>0?Math.round(b.cur/b.total*100):0;
     var it=ce('div','shelf-item'+(b.id===S.curBook?' on':''));
     it.innerHTML='<div class="cv" style="background:'+(b.cv||'#E8552D')+'">'+esc(b.nm.slice(0,2))+'</div>'+
       '<div class="mid"><h4>'+esc(b.nm)+'</h4>'+
@@ -722,17 +859,18 @@ function renderBook(){
       S.curBook=b.id;save();renderBook();
     });
     it.querySelector('[data-up]').addEventListener('click',function(){
+      if(!b.total){toast('这本还没填总章数，先点「读完」');return;}
       if(b.cur<b.total){b.cur++;save();renderBook();toast('进度 +1 📖');}else toast('这本已经读完啦');
     });
     it.querySelector('[data-fin]').addEventListener('click',function(){
+      if(!b.total){toast('这本还没填总章数');return;}
+      if(b.cur===b.total){toast('这本已经读完啦');return;}
       b.cur=b.total;save();renderBook();toast('读完啦 🎉 铁山靠');
     });
     sh.appendChild(it);
   });
   var cur=S.books.filter(function(b){return b.id===S.curBook;})[0]||S.books[0];
   $('#shelfCnt').textContent=S.books.length+' 本';
-  var rf=$('#readFoot');if(rf&&cur)rf.textContent=cur.cur+'/'+cur.total;
-  $('#readTotal').textContent=S.books.reduce(function(a,b){return a+b.cur;},0);
 
   /* 本周打卡格 */
   var td=dayKey(TODAY()),wk=weekDays(),g='',cnt=0;
@@ -751,7 +889,6 @@ function renderBook(){
     });
   });
   $('#readWeek').textContent=cnt+' / 7';
-  $('#readStreak').textContent=readStreak();
 
   /* 近 7 天明细 */
   var hist='';
@@ -763,17 +900,11 @@ function renderBook(){
   }
   $('#readHist').innerHTML=hist;
 }
-function readStreak(){
-  var n=0,d=TODAY();
-  if(!S.readDays[dayKey(d)])d=shiftDay(d,-1);
-  while(S.readDays[dayKey(d)]){n++;d=shiftDay(d,-1);}
-  return n;
-}
 var newBookBtn=$('#newBook');
 if(newBookBtn)newBookBtn.addEventListener('click',function(){
   var nm=prompt('新书的名字？');
   if(!nm||!nm.trim())return;
-  var t=parseInt(prompt('一共几章？','12'),10)||12;
+  var t=Math.max(1,parseInt(prompt('一共几章？','12'),10)||12);   /* 至少 1 章：0 章的书没有进度可言 */
   S.books.push({id:Date.now(),nm:nm.trim(),cur:0,total:t,cv:['#E8552D','#7C5CBF','#46B59A','#D9A441'][S.books.length%4]});
   save();renderBook();toast('上架一本 📚');
 });
@@ -824,8 +955,6 @@ function renderLedgerStats(){
   $('#statIn').textContent=fmt(g.in);
   $('#statOut').textContent=fmt(g.out);
   $('#statNet').textContent=(net<0?'-':'')+fmt(Math.abs(net));
-  $('#ledMonth').textContent=(net<0?'-':'')+fmt(Math.abs(net));   /* 头部“本月净结余”，跟统计卡同源 */
-  $('#footLed').textContent=fmt(g.out);
   var avg=days?g.out/days:0;
   $('#ledTip').textContent='日均支出 '+fmt(avg)+' · 共 '+g.n+' 笔';
   /* 近 6 个月支出柱 */
@@ -948,14 +1077,14 @@ function renderJournals(enterTs){
   });
   $('#journalCnt').textContent=S.journals.length+' 篇';
 }
-/* 兼容旧版单字符串 journal，并入历史 */
+/* 日报不再预置示例（11-18 移除）：
+   这里原来会往空列表里塞 3 条假的「2026.08.xx」日报。两个问题：
+   ① 数据是异步取回的，取回后 S.journals 会被文件内容整体覆盖，这几条实际上只闪一下
+      —— 只有读盘失败时才真的留在界面上、再被下一次 save 写进文件；
+   ② 假日期会把「练习第 N 天」算到 3 个月前。
+   新装 / 删空一律保持空白。旧版的单字符串 journal 字段由 data-layer 归一化时丢弃，
+   不需要在这里并入。 */
 if(!S.journals)S.journals=[];
-if(typeof S.journal==='string'&&S.journal.trim()&&!S.journals.length){S.journals.push(makeEntry(S.journal));S.journal='';}
-if(!S.journals.length)S.journals=[
-  makeEntry('昨天把季度汇报 PPT 初稿写完，配图用了练习室 vlog 截图，主管说节奏感不错。','2026.08.22 周六'),
-  makeEntry('周五摸鱼日，顺手把灵感墙「ikun 开屏动画」立项，周末开工。','2026.08.21 周五'),
-  makeEntry('读了《认知觉醒》两章，关于元认知的部分很受用，记了三条笔记。','2026.08.20 周四')
-];
 $('#journal').value='';
 renderJournals();
 $('#saveJournal').addEventListener('click',function(){
@@ -973,7 +1102,8 @@ document.querySelectorAll('.carousel').forEach(function(c){
   if(tr.classList.contains('task-grid')){
     var key=tr.id==='horTrack'?'hor':'today';
     function turn(d){
-      var list=S.todos.filter(function(x){return key==='today'?x.hor==='today':x.hor===curHor;});
+      /* 必须走池子函数 —— 否则翻页会把「完成沉底」的顺序打回存储原序（用户抓到的 BUG）。 */
+      var list=key==='today'?todayTodos():goalTodos();
       var pages=Math.max(1,Math.ceil(list.length/PAGE_SIZE));
       var p=(pageState[key]||0)+d;if(p<0)p=0;if(p>=pages)p=pages-1;
       pageState[key]=p;
@@ -987,9 +1117,9 @@ document.querySelectorAll('.carousel').forEach(function(c){
        两条纪律：①累积到阈值才翻，触控板那种连续小 delta 不会一抖一页；
        ②翻页后 340ms 静默，一次滑轮不会连翻三四页。
        已经翻到头上/尾上时不拦截默认行为 —— 让页面接着往下滚，别把人卡在卡片里。 */
-    var accW=0, lockW=0, WTH=40, WLOCK=340;
+    var accW=0, accT=0, lockW=0, WTH=40, WLOCK=340, WIDLE=400;
     function canTurn(d){
-      var list=S.todos.filter(function(x){return key==='today'?x.hor==='today':x.hor===curHor;});
+      var list=key==='today'?todayTodos():goalTodos();
       var pages=Math.max(1,Math.ceil(list.length/PAGE_SIZE));
       var q=(pageState[key]||0)+d;
       return q>=0&&q<pages;
@@ -1001,6 +1131,11 @@ document.querySelectorAll('.carousel').forEach(function(c){
       var ax=Math.abs(e.deltaX),ay=Math.abs(e.deltaY);
       if(ax>=ay*0.85){accW=0;return;}
       if(Date.now()<lockW){e.preventDefault();return;}   /* 刚翻过页：这段静默期连页面滚动一起吃掉 */
+      /* 停手超过 400ms 就把半截累积作废：否则几次零散的小滚动（各 30px）会攒成
+         一次翻页，用户只是想把页面往下滚一点，卡片却莫名跳了一页。 */
+      var nowT=Date.now();
+      if(nowT-accT>WIDLE)accW=0;
+      accT=nowT;
       accW+=e.deltaY;
       if(Math.abs(accW)<WTH)return;
       var d=accW>0?1:-1;
@@ -1119,10 +1254,16 @@ setInterval(function(){loadWeather(false);},30*60*1000);
 /* 弹窗 */
 var modalBg=$('#modalBg'),modalBox=$('#modalBox'),modalTitle=$('#modalTitle'),modalInput=$('#modalInput'),modalArea=$('#modalArea'),
     modalAmount=$('#modalAmount'),modalCatRow=$('#modalCatRow'),modalAmtRow=$('#modalAmtRow'),modalView=$('#modalView'),
+    modalHorRow=$('#modalHorRow'),
     modalOk=$('#modalOk'),modalCancel=$('#modalCancel'),pending=null;
-var curCat='daily',curSign='out';
+var curCat='daily',curSign='out',curPool='today';
 modalCatRow.querySelectorAll('button').forEach(function(b){b.addEventListener('click',function(){curCat=b.dataset.k;modalCatRow.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b);});});});
 modalAmtRow.querySelectorAll('button').forEach(function(b){b.addEventListener('click',function(){curSign=b.dataset.s;modalAmtRow.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b);});});});
+/* 新建任务的类型：单次→今日待办(hor='today')；长期→长期目标(hor='goal')。
+   'goal' 是新增的合法 hor 值；老数据的 short/mid/long 依旧归长期目标池，无需迁移。 */
+if(modalHorRow)modalHorRow.querySelectorAll('button').forEach(function(b){
+  b.addEventListener('click',function(){curPool=b.dataset.h;modalHorRow.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x===b);});});
+});
 function openModal(title,opts){
   opts=opts||{};pending=opts.ctx||null;
   var view=!!opts.view;
@@ -1130,9 +1271,10 @@ function openModal(title,opts){
   modalTitle.textContent=title;
   modalInput.value='';modalArea.value='';modalAmount.value='';
   modalView.style.display=view?'flex':'none';
-  modalInput.style.display=view?'none':'block';
-  modalArea.style.display=(!view&&opts.area)?'block':'none';
+  modalInput.style.display=(view||opts.onlyArea)?'none':'block';
+  modalArea.style.display=(!view&&(opts.area||opts.onlyArea))?'block':'none';
   modalCatRow.style.display=(!view&&opts.cat)?'flex':'none';
+  if(modalHorRow)modalHorRow.style.display=(!view&&opts.pool)?'flex':'none';
   modalAmtRow.style.display=(!view&&opts.amount)?'flex':'none';
   modalOk.style.display=view?'none':'inline-block';
   modalCancel.textContent=view?'关闭':'取消';
@@ -1142,12 +1284,15 @@ function openModal(title,opts){
   if(view){modalView.innerHTML=opts.viewHtml||'';}
   else{
     curCat='daily';curSign='out';
+    /* 默认池子跟随打开弹窗时的页签：从长期目标进来默认「长期」，其余默认「单次」。 */
+    curPool=(pending&&pending.hor&&pending.hor!=='today')?'goal':'today';
     modalCatRow.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x.dataset.k==='daily');});
+    if(modalHorRow)modalHorRow.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x.dataset.h===curPool);});
     modalAmtRow.querySelectorAll('button').forEach(function(x){x.classList.toggle('on',x.dataset.s==='out');});
     modalInput.placeholder=opts.ph||'标题';
   }
   modalBg.classList.add('on');
-  if(!view)(opts.amount?modalAmount:modalInput).focus();
+  if(!view)(opts.onlyArea?modalArea:(opts.amount?modalAmount:modalInput)).focus();
 }
 function showJournalDetail(it){
   var p=(it.date||'').split(' ');
@@ -1174,7 +1319,7 @@ document.querySelectorAll('[data-add]').forEach(function(b){b.addEventListener('
   var t=b.dataset.add;
   if(t==='idea')openModal('贴一张灵感',{ph:'一句话灵感…',ctx:{type:'idea'}});
   else if(t==='ledger')openModal('记一笔',{amount:true,ph:'这笔是啥，如：午餐',ctx:{type:'ledger'}});
-  else openModal('新增待办',{area:true,cat:true,ph:'想做点啥…',ctx:{type:'todo',hor:t==='today'?'today':t==='short'?'short':t==='mid'?'mid':'long'}});
+  else openModal('新增任务',{area:true,cat:true,pool:true,ph:'想做点啥…',ctx:{type:'todo',hor:(t==='today'?'today':'goal')}});
 });});
 var newHabitBtn=$('#newHabit');
 if(newHabitBtn)newHabitBtn.addEventListener('click',function(){
@@ -1183,6 +1328,9 @@ if(newHabitBtn)newHabitBtn.addEventListener('click',function(){
 $('#modalCancel').addEventListener('click',closeModal);
 modalBg.addEventListener('click',function(e){if(e.target===modalBg)closeModal();});
 $('#modalOk').addEventListener('click',function(){
+  /* 只读弹窗（view）里 pending 是 null，这里防御一下：老逻辑直接读 pending.type，
+     一旦有人用回车/脚本触发到就会抛 TypeError，整段新增流程静默失效。 */
+  if(!pending)return;
   var v=modalInput.value.trim();
   if(pending.type==='idea'){
     if(!v){toast('先写点东西嘛');return;}
@@ -1194,6 +1342,14 @@ $('#modalOk').addEventListener('click',function(){
     var HICON=['🏀','💪','🏃','🧘','🚴','🤸','🏋️','⛹️','🪢','🥊','🦵','🧗'];
     S.habits.push({ic:HICON[S.habits.length%HICON.length],nm:v,hist:{}});
     save();closeModal();renderHabits();toast('目标已加进打卡清单 🏀');
+  } else if(pending.type==='note'){
+    /* 补写备注：只改这一个数据对象的 note 和当前卡片的文字节点。
+       不 renderTodos —— 整卡重建会翻回正面、打断刚写完就看到结果的反馈。 */
+    var nv=modalArea.value.trim();
+    pending.it.note=nv;
+    var bk=pending.card&&pending.card.querySelector('.bk-note');
+    if(bk)bk.textContent=nv||NOTE_EMPTY;
+    save();closeModal();toast(nv?'备注已写上 ✎':'备注已清空');
   } else if(pending.type==='ledger'){
     var amt=parseFloat(modalAmount.value);
     if(!v&&!amt){toast('写个名儿或金额呗');return;}
@@ -1202,23 +1358,28 @@ $('#modalOk').addEventListener('click',function(){
     save();closeModal();renderLedger();toast(curSign==='in'?('入账 +¥'+amt+' 💰'):('已支出 -¥'+amt+' 💸'));
   } else {
     if(!v){toast('先写点东西嘛');return;}
-    S.todos.push({t:v,k:curCat,note:modalArea.value.trim(),done:false,hor:pending.hor});
-    if(pending.hor!=='today')logGoal(v,pending.hor,'added');
-    /* 新增后切到对应 tab，并跳到含新项的那页（新项 push 在末尾），保证新卡片可见 */
-    if(pending.hor==='today'){
-      var n=S.todos.filter(function(x){return x.hor==='today';}).length;
-      pageState.today=Math.max(0,Math.ceil(n/PAGE_SIZE)-1);setTaskTab('today');
+    /* 11-19 用户定：新增的任务永远置顶（第一页第一个），其余卡片依次往后排。
+       unshift 到数组头；池子函数按 done 稳定排序、新项 done=false 落在未完成区最前，
+       所以渲染后就是第一页第一张。页签跳回第 0 页才能看到它。 */
+    /* 落池由弹窗里选的「单次 / 长期」决定，不再由打开时的页签/阶段决定。
+       单次→hor='today'（今日待办）；长期→hor='goal'（长期目标池，老 short/mid/long 同池）。 */
+    var newHor=(curPool==='goal')?'goal':'today';
+    S.todos.unshift({t:v,k:curCat,note:modalArea.value.trim(),done:false,hor:newHor});
+    if(newHor!=='today')logGoal(v,newHor,'added');
+    if(newHor==='today'){
+      pageState.today=0;setTaskTab('today');
+      toast('已加进今日待办 ✦');
     } else {
-      curHor=pending.hor;horSegApi.setActive({short:0,mid:1,long:2}[pending.hor]||0);
-      var m=S.todos.filter(function(x){return x.hor===curHor;}).length;
-      pageState.hor=Math.max(0,Math.ceil(m/PAGE_SIZE)-1);setTaskTab('hor');
+      pageState.hor=0;setTaskTab('hor');
+      toast('已加进长期目标 🎯');
     }
-    save();closeModal();renderTodos();renderIdeas();paintHolidayCard();toast('已添加 ✦');
+    save();closeModal();renderTodos();renderIdeas();paintHolidayCard();
   }
 });
 
 /* toast */
-var toastTimer;function toast(msg){var t=$('#toast');t.innerHTML=msg;t.classList.add('on');clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.classList.remove('on');},1800);}
+/* toast 只放纯文字：以前用 innerHTML，名字里带 < 的内容能直接注入 DOM。 */
+var toastTimer;function toast(msg){var t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toastTimer);toastTimer=setTimeout(function(){t.classList.remove('on');},1800);}
 
 /* 二次确认（所有删除统一走这里防误触） */
 var confirmBg=$('#confirmBg'),confirmMsg=$('#confirmMsg'),confirmYes=$('#confirmYes'),confirmNo=$('#confirmNo'),confirmCb=null;
@@ -1237,93 +1398,29 @@ confirmYes.addEventListener('click',function(){var cb=confirmCb;closeConfirm();i
   var cols=['rgba(232,85,45,','rgba(185,139,224,'];
   for(var i=0;i<46;i++)ps.push({x:Math.random()*W,y:Math.random()*H,r:Math.random()*2.2+0.6,
     vx:(Math.random()-.5)*.25,vy:(Math.random()-.5)*.25,c:cols[i%2],a:Math.random()*.4+.15});
+  /* 弹窗打开 / 窗口收进托盘时停笔不画：这几颗点没人看，但 backgroundThrottling
+     关掉之后它会一直按 60fps 重绘整屏 canvas。停的是「绘制」，rAF 照样排下一次，
+     所以恢复是自动的（弹窗一关、窗口一露出来就接着动）。 */
   (function loop(){
-    ctx.clearRect(0,0,W,H);
-    for(var i=0;i<ps.length;i++){var p=ps[i];p.x+=p.vx;p.y+=p.vy;
-      if(p.x<0||p.x>W)p.vx*=-1;if(p.y<0||p.y>H)p.vy*=-1;
-      ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fillStyle=p.c+p.a+')';ctx.fill();}
+    if(!document.hidden&&!document.body.classList.contains('modal-open')){
+      ctx.clearRect(0,0,W,H);
+      for(var i=0;i<ps.length;i++){var p=ps[i];p.x+=p.vx;p.y+=p.vy;
+        if(p.x<0||p.x>W)p.vx*=-1;if(p.y<0||p.y>H)p.vy*=-1;
+        ctx.beginPath();ctx.arc(p.x,p.y,p.r,0,7);ctx.fillStyle=p.c+p.a+')';ctx.fill();}
+    }
     requestAnimationFrame(loop);
   })();
 })();
 
-/* RubberSegment 原生实现（把 React 组件移植为原生，支持点击/拖拽/键盘，配色见 CSS） */
-function rubber(over,dim){return (over*dim*0.55)/(dim+0.55*Math.abs(over));}
-var placeHor=function(){};
-function initRubberSegment(seg,onChange){
-  var btns=Array.prototype.slice.call(seg.querySelectorAll('.rubber-segment__item'));
-  var thumb=seg.querySelector('.rubber-segment__thumb');
-  var idx=0;btns.forEach(function(b,i){if(b.getAttribute('aria-checked')==='true')idx=i;});
-  function inset(){var v=parseFloat(getComputedStyle(seg).getPropertyValue('--rs-inset'));return isNaN(v)?3:v;}
-  function rects(){var p=seg.getBoundingClientRect();return btns.map(function(b){var r=b.getBoundingClientRect();return {l:r.left-p.left,w:r.width};});}
-  function place(i,anim){
-    var rs=rects();if(!rs[i])return;var ins=inset();
-    thumb.style.transition=anim?('left .3s cubic-bezier(.23,1,.32,1),width .3s cubic-bezier(.23,1,.32,1)'):'none';
-    thumb.style.left=rs[i].l+'px';thumb.style.width=rs[i].w+'px';thumb.style.top=ins+'px';thumb.style.bottom=ins+'px';
-  }
-  placeHor=function(){place(idx,false);};
-  function setActive(i,fire){
-    if(i<0||i>=btns.length)return;
-    btns.forEach(function(b,j){b.setAttribute('aria-checked',j===i?'true':'false');});
-    place(i,true);
-    if(fire&&i!==idx){idx=i;onChange(btns[i].dataset.hor,i);}else idx=i;
-  }
-  btns.forEach(function(b,i){
-    b.addEventListener('click',function(e){if(e.detail===0)setActive(i,true);});
-    b.addEventListener('keydown',function(e){
-      if(e.key==='ArrowRight'||e.key==='ArrowDown'){e.preventDefault();setActive(Math.min(btns.length-1,idx+1),true);}
-      else if(e.key==='ArrowLeft'||e.key==='ArrowUp'){e.preventDefault();setActive(Math.max(0,idx-1),true);}
-    });
-  });
-  var drag=null;
-  seg.addEventListener('pointerdown',function(e){
-    if(e.button!==0)return;
-    try{seg.setPointerCapture(e.pointerId);}catch(_){}
-    drag={id:e.pointerId,x0:e.clientX,live:false,w:0,off:0};
-    btns[idx].dataset.pressed='';
-  });
-  seg.addEventListener('pointermove',function(e){
-    if(!drag||e.pointerId!==drag.id||!drag.live&&Math.abs(e.clientX-drag.x0)<4)return;
-    if(!drag.live){drag.live=true;var rs=rects();drag.off=rs[idx].l;drag.w=rs[idx].w;}
-    var p=seg.getBoundingClientRect(),ins=inset(),l=drag.off+(e.clientX-drag.x0),maxL=p.width-drag.w-ins*2;
-    if(l<0)l=rubber(l,drag.w);
-    else if(l>maxL)l=maxL+rubber(l-maxL,drag.w);
-    thumb.style.transition='none';thumb.style.left=l+'px';
-  });
-  function endDrag(e){
-    if(!drag||e.pointerId!==drag.id)return;
-    delete btns[idx].dataset.pressed;seg.removeAttribute('data-held');
-    if(drag.live){
-      var rs=rects(),center=parseFloat(thumb.style.left)+drag.w/2,best=0;
-      for(var i=1;i<rs.length;i++){if(Math.abs(rs[i].l+rs[i].w/2-center)<Math.abs(rs[best].l+rs[best].w/2-center))best=i;}
-      setActive(best,true);
-    }else if(e.clientX!==undefined){
-      var tap=-1;
-      btns.forEach(function(b,i){var r=b.getBoundingClientRect();if(e.clientX>=r.left&&e.clientX<=r.right)tap=i;});
-      if(tap>=0)setActive(tap,true);
-    }
-    drag=null;
-  }
-  seg.addEventListener('pointerup',endDrag);
-  seg.addEventListener('pointercancel',endDrag);
-  seg.addEventListener('lostpointercapture',endDrag);
-  seg.addEventListener('pointerdown',function(){seg.setAttribute('data-held','');});
-  requestAnimationFrame(function(){place(idx,false);});
-  return {setActive:function(i){setActive(i,false);}};
-}
-
-/* 阶段性任务：分类切换 + 新增 */
-/* 页签行右侧的加号（today / hor 共用一个，原来各有一个、各占一行）。
-   加什么由当前页签决定：阶段性任务按当前阶段（短期/中期/长期）建，今日任务固定 today。
+/* 页签行右侧的加号（today / hor 共用一个）。
+   方向一起：新增统一弹窗、类型在里面选；这里只按当前页签给个默认池子。
    历史页没有新增，按钮隐藏但保留占位，避免整行左右跳动。 */
 var taskAddBtn=$('#taskAdd');
 function curTaskPanel(){var p=document.querySelector('.todo-panel.on');return p?p.dataset.panel:'today';}
 if(taskAddBtn)taskAddBtn.addEventListener('click',function(){
-  if(curTaskPanel()==='hor'){
-    var lb={short:'短期',mid:'中期',long:'长期'}[curHor]||'待办';
-    openModal('新增'+lb,{area:true,cat:true,ph:'想做点啥…',ctx:{type:'todo',hor:curHor}});
-  }else{
-    openModal('新增待办',{area:true,cat:true,ph:'想做点啥…',ctx:{type:'todo',hor:'today'}});
-  }
+  /* 方向一：新增统一一个弹窗，类型（单次/长期）在里面选，默认跟随当前页签。 */
+  var hor=curTaskPanel()==='hor'?'goal':'today';
+  openModal('新增任务',{area:true,cat:true,pool:true,ph:'想做点啥…',ctx:{type:'todo',hor:hor}});
 });
 /* 历史页签内的子页签（今日任务历史 / 阶段性任务历史） */
 document.querySelectorAll('.hist-pane .ph-tab').forEach(function(b){
@@ -1331,46 +1428,15 @@ document.querySelectorAll('.hist-pane .ph-tab').forEach(function(b){
 });
 /* 「历史累计」磁贴只做展示：11-17 起不再点开历史页（连 ↗ 一起删掉），
    免得一格数据看着像入口。历史入口只剩今日任务标题下的「历史」页签。 */
-/* 阶段性任务：扇形展开分段控件（三块叠放 + 三个热区联动），
-   对外接口与旧 rubber-segment 一致，搜索定位仍可调 setActive(i)。 */
-function initFanSegment(seg,onChange){
-  var touches=Array.prototype.slice.call(seg.querySelectorAll('.touch'));
-  var blocks=Array.prototype.slice.call(seg.querySelectorAll('.button'));
-  var idx=0;
-  touches.forEach(function(t,i){if(t.getAttribute('aria-checked')==='true')idx=i;});
-  function setActive(i,fire){
-    if(i<0||i>=touches.length)return;
-    var changed=(i!==idx);
-    touches.forEach(function(t,j){
-      t.setAttribute('aria-checked',j===i?'true':'false');
-      blocks[j].classList.toggle('on',j===i);
-    });
-    idx=i;
-    if(fire&&changed)onChange(touches[i].dataset.hor,i);
-  }
-  touches.forEach(function(t,i){
-    t.addEventListener('click',function(){setActive(i,true);});
-    t.addEventListener('keydown',function(e){
-      if(e.key==='Enter'||e.key===' '){e.preventDefault();setActive(i,true);}
-      else if(e.key==='ArrowRight'||e.key==='ArrowDown'){e.preventDefault();setActive(Math.min(touches.length-1,idx+1),true);}
-      else if(e.key==='ArrowLeft'||e.key==='ArrowUp'){e.preventDefault();setActive(Math.max(0,idx-1),true);}
-    });
-  });
-  setActive(idx,false);
-  return {setActive:function(i){setActive(i,false);}};
-}
-var horSegApi=initFanSegment($('#horSeg'),function(h){curHor=h;pageState.hor=0;renderHorTodos();});
-var _switchView=switchView;
-switchView=function(v){_switchView(v);if(v==='todos')requestAnimationFrame(placeHor);};
-
 /* 搜索（粗野主义输入框）：跨 待办/灵感/习惯/阅读/账本 */
 var searchInput=$('#searchInput'),searchPanel=$('#searchPanel');
-var HORNAME={today:'今日',short:'短期',mid:'中期',long:'长期'},HORIDX={short:0,mid:1,long:2};
+/* 方向一：搜索结果只标两个池子；老 hor 值(short/mid/long)统一显示「长期目标」。 */
+function poolTag(hor){return hor==='today'?'今日待办':'长期目标';}
 function doSearch(q){
   q=(q||'').trim();
   if(!q){searchPanel.classList.remove('on');return;}
   var ql=q.toLowerCase(),res=[];
-  S.todos.forEach(function(it){if(((it.t||'')+' '+(it.note||'')).toLowerCase().indexOf(ql)>=0)res.push({v:'todos',tag:HORNAME[it.hor]||'计划',t:it.t,hor:it.hor});});
+  S.todos.forEach(function(it){if(((it.t||'')+' '+(it.note||'')).toLowerCase().indexOf(ql)>=0)res.push({v:'todos',tag:poolTag(it.hor),t:it.t,hor:it.hor});});
   (S.journals||[]).forEach(function(it){
     if(((it.text||'')+' '+(it.date||'')).toLowerCase().indexOf(ql)>=0)
       res.push({v:'journal',tag:'日报',t:(it.date||'')+' · '+(it.text||'').replace(/\s+/g,' ').slice(0,60)});
@@ -1381,17 +1447,19 @@ function doSearch(q){
     if((b.nm||'').toLowerCase().indexOf(ql)>=0)res.push({v:'reading',tag:'阅读',t:'《'+b.nm+'》 已读 '+b.cur+'/'+b.total});
   });
   S.ledger.forEach(function(e){if((e.d||'').toLowerCase().indexOf(ql)>=0)res.push({v:'ledger',tag:'账本',t:e.d+' '+(e.a>0?'+':'')+e.a+' 元'});});
-  /* 计划/目标历史：命中标题/备注/日期，结果带日期标签，点开直接定位到那天的快照 */
+  /* 计划历史（今日任务）：仍从 planDays.items 快照找 */
   Object.keys(S.planDays||{}).forEach(function(k){
     var d=S.planDays[k];
     (d.items||[]).forEach(function(it){
       if(((it.t||'')+' '+(it.note||'')+' '+k).toLowerCase().indexOf(ql)>=0)
         res.push({v:'planhist',tag:'历史计划',t:k+' · '+it.t+(it.done?' ✓':''),day:k});
     });
-    (d.goals||[]).forEach(function(g){
-      if(((g.t||'')+' '+(g.note||'')+' '+k).toLowerCase().indexOf(ql)>=0)
-        res.push({v:'goalhist',tag:'历史目标',t:k+' · '+({short:'短期',mid:'中期',long:'长期'}[g.hor]||'短期')+' '+g.t+(g.done?' ✓':''),day:k});
-    });
+  });
+  /* 阶段性任务历史（11-19）：从 goalLog 事件找，日期用事件发生日 */
+  (S.goalLog||[]).forEach(function(g){
+    var day=goalEventDay(g.ts);
+    if(((g.t||'')+' '+day).toLowerCase().indexOf(ql)>=0)
+      res.push({v:'goalhist',tag:'目标记录',t:day+' · '+(GOAL_ACT[g.action]||'记录')+' '+g.t,day:day});
   });
   searchPanel.innerHTML=res.length?res.slice(0,12).map(function(r){
     return '<button class="s-item" data-v="'+r.v+'" data-hor="'+(r.hor||'')+'" data-day="'+(r.day||'')+'"><span class="s-tag">'+r.tag+'</span><span class="s-txt">'+esc(String(r.t))+'</span></button>';
@@ -1408,11 +1476,12 @@ searchPanel.addEventListener('click',function(e){
   var b=e.target.closest('.s-item');if(!b)return;
   var v=b.dataset.v,hor=b.dataset.hor;
   if(v==='planhist'){switchView('todos');inlineHistTab='plan';setTaskTab('hist',b.dataset.day||'');}
-  else if(v==='goalhist'||v==='goallog'){switchView('todos');inlineHistTab='goals';setTaskTab('hist',b.dataset.day||'');}
+  else if(v==='goalhist'){switchView('todos');inlineHistTab='goals';setTaskTab('hist',b.dataset.day||'');}
   else{
     switchView(v);
     if(v==='todos'){
-      if(HORIDX[hor]!==undefined){setTaskTab('hor');horSegApi.setActive(HORIDX[hor]);curHor=hor;pageState.hor=0;renderHorTodos();}
+      /* 按池子定位：old short/mid/long 与新 goal 都进长期目标池。 */
+      if(hor&&hor!=='today'){setTaskTab('hor');pageState.hor=0;renderHorTodos();}
       else{setTaskTab('today');pageState.today=0;renderTodos();}
     }
   }
@@ -1474,11 +1543,6 @@ function suCfg(){
   if(!S.settings.standup||typeof S.settings.standup!=='object')S.settings.standup={enabled:false,intervalMin:45};
   return S.settings.standup;
 }
-function suFmt(ms){
-  var s=Math.max(0,Math.ceil(ms/1000)),m=Math.floor(s/60),ss=s%60;
-  if(m<=0)return ss+' 秒';
-  return m+' 分 '+(ss<10?'0':'')+ss+' 秒';
-}
 function suFmtTime(sec){
   sec=Math.max(0,Math.floor(sec||0));
   var m=Math.floor(sec/60),s=sec%60;
@@ -1518,15 +1582,44 @@ function paintStandup(st){
     if(fg)fg.style.width=(total>0?(1-left/total)*100:0).toFixed(1)+'%';
   }
 }
-/* 每秒把剩余时间往下推一格，顺手把右栏也刷了（两处显示的是同一个事实） */
+/* 每秒把剩余时间往下推一格，顺手把右栏也刷了（两处显示的是同一个事实）。
+   **不能写成「每跑一次 tick 就减 1000」**：窗口收进托盘、或切到别的应用之后，
+   Chromium 会把渲染层的定时器节流到每分钟才跑一次，那样 60 秒才减 1 秒，
+   倒计时看着就像停住了 —— 这就是「后台不计时」的真正原因。
+   改成按真实时间差递减：被延迟多久，就一次减掉多久，数字始终对得上。
+   主进程那边一直是准的（单调时钟 + 1 秒 tick），这里只是把显示追回来。 */
+var suTickAt=0;
 setInterval(function(){
-  if(!suLive.enabled)return;
-  if(!suLive.pending)suLive.remainMs=Math.max(0,suLive.remainMs-1000);
+  var now=Date.now();
+  /* 判断「要不要倒计时」看本地开关，不看主进程推来的 suLive.enabled：
+     刚打开开关时 save 还在 120ms 节流里，主进程要等落盘才重排，这一秒内
+     suLive 还是旧的 false —— 用它会白停一格，看着像「开关没生效」。 */
+  if(!suCfg().enabled){suTickAt=0;return;}
+  if(!suTickAt)suTickAt=now;
+  var dt=now-suTickAt;
+  suTickAt=now;
+  if(!suLive.pending)suLive.remainMs=Math.max(0,suLive.remainMs-dt);
+  suLive.enabled=true;
   paintStandup();
 },1000);
+/* 回到前台再跟主进程对一次表：系统睡眠、进程被挂起这类情况会让本地推算落后，
+   这里以主进程的单调时钟为准，一次性纠回来。 */
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible'&&api&&api.standupGet){
+    suTickAt=0;
+    api.standupGet().then(paintStandup);
+  }
+});
 
 if(suSwitch)suSwitch.addEventListener('click',function(){
   var c=suCfg();c.enabled=!c.enabled;
+  /* 先把显示状态按本地配置摆好，不等主进程那一轮广播：
+     落盘有 120ms 节流，主进程要收到 save 才重排，中间这段时间屏幕上会停在
+     00:00（或沿用上一轮的残余数字），看起来就像开关没反应。 */
+  suLive.enabled=c.enabled;
+  suLive.pending=false;
+  suLive.remainMs=c.enabled?c.intervalMin*60000:0;
+  suTickAt=Date.now();
   if(!c.enabled)closeStandup();
   save();paintStandup();
   if(api&&api.standupGet)api.standupGet().then(paintStandup);
@@ -1571,6 +1664,8 @@ function applySuInt(){
   closeSuInt();
   if(v===c.intervalMin){toast('还是每 '+v+' 分钟');return;}
   c.intervalMin=v;
+  /* 改间隔 = 重开一轮（主进程 suReset 也是这个语义），这里同步把倒计时清零到新间隔 */
+  suLive.remainMs=v*60000;suTickAt=Date.now();suLive.pending=false;
   save();paintStandup();
   if(api&&api.standupGet)api.standupGet().then(paintStandup);
   toast('改成每 '+v+' 分钟提醒一次');
@@ -1888,10 +1983,6 @@ function bootRender(){
   paintHeader();
   renderCal();         /* 顶层那次渲染时数据还没回来，这里按归档数据补上日期标记 */
   setTimeout(replayViewAnim,60);
-  placeTabSlider();     /* 贴纸滑块定位：按钮宽度随字体加载才定，这里先摆一次 */
-  window.addEventListener('resize',placeHor);
-  window.addEventListener('resize',function(){placeTabSlider();});
-  if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){placeHor();placeTabSlider();});
   maybeShowWhatsNew();   /* 新版本首次启动：先把界面画好，再弹更新说明 */
 }
 /* 启动：先把数据取回来再渲染（文件存储是异步的，不能像 localStorage 那样同步读） */
@@ -2027,7 +2118,7 @@ function parseNotes(raw){
 }
 
 /* 按钮忙碌态：转圈 loading + 文案切换，任何失败都要能回到可点状态。
-   更新过程中「稍后」也一起锁住 —— 关掉弹窗只会让人看不到进度。 */
+   更新过程中「先不更新」也一起锁住 —— 关掉弹窗只会让人看不到进度。 */
 function setUpBusy(on,label){
   var btn=$('#upNow'),txt=$('#upNowTxt'),later=$('#upLater'),box=$('.up-box');
   if(!btn)return;
@@ -2076,7 +2167,17 @@ function renderUpProgress(p){
   if(bar)bar.style.width=pct+'%';
 }
 var upLater=$('#upLater'),upNow=$('#upNow'),setUpdateBtn=$('#setUpdate');
-if(upLater)upLater.addEventListener('click',closeUpdate);
+if(upLater)upLater.addEventListener('click',function(){
+  /* 「先不更新」不是单纯关弹窗：记住这个版本，自动检查不再为它打扰。
+     想升了随时点设置里的「开团」，手动检查不受这个标记影响。 */
+  var v=(upInfo&&upInfo.version)||'';
+  if(v&&api&&api.skipUpdate){
+    api.skipUpdate(v).then(function(r){
+      if(r&&r.ok!==false)toast('先不更新 · 这个版本不再提醒');
+    }).catch(function(){});
+  }
+  closeUpdate();
+});
 if($('#updateBg'))$('#updateBg').addEventListener('click',function(e){
   if(e.target===this&&!($('#upNow')&&$('#upNow').classList.contains('loading')))closeUpdate();
 });

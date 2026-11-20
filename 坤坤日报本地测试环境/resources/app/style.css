@@ -477,18 +477,11 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
    2) 原版 Impact italic + 四向 1px 白描边是给大写英文的，中文 15px 照抄会糊成
       一团，改为产品字重 700，只在选中态留 1px 墨黑描边给白字定边。
    3) 原版 24px 大字 + 0.8rem 内边距在这里会顶掉卡片空间，收到 15px / 36px 高。 */
-/* 页签行：页签贴左，右侧依次是阶段性任务的短/中/长和新增按钮，全在这一行。
-   原来「今日任务」和「阶段性任务」各有一个加号、各占一整行；合并后两页结构完全一致，
-   切换页签时卡片区不会上下跳 41px。
-   seg-slot 常驻占位（今日/历史页只是把控件隐藏），加号位置才不会左右移动。 */
+/* 页签行：页签贴左，新增按钮贴右，全在这一行。
+   11-20 方向一去掉短/中/长分段控件后，seg-slot 占位一并删除；
+   加号用 margin-left:auto 顶到最右，三页签切换时位置不再变动。 */
 .todo-tabrow{display:flex;align-items:center;gap:16px;margin:4px 0 6px}
-.seg-slot{position:relative;flex:0 0 140px;width:140px;height:32px;margin-left:auto}
-/* 显隐必须用 display，不能用 visibility：
-   visibility 是继承属性，而 .button 上有 transition:.3s（= all），子元素会把它
-   当成可过渡属性，父级已经 hidden 了按钮还要再亮 0.3s 才真正消失
-   （用户反馈「切走时短中长期消失缓慢不彻底」就是这个）。display 不可过渡，立即生效。 */
-.seg-slot .button-box{display:none}
-.seg-slot.on .button-box{display:flex}
+.todo-tabrow #taskAdd{margin-left:auto}
 .todo-tabs{position:relative;display:flex;width:max-content;
   margin:0;border:2px solid var(--ink);border-radius:12px;
   background:var(--paper);box-shadow:3px 3px 0 var(--ink);overflow:hidden}
@@ -666,7 +659,14 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .tcard .ttl{font-size:14px;font-weight:500;line-height:1.35}
 .tcard.done .ttl{text-decoration:line-through;color:var(--soft)}
 .flip-front .hold-btn{margin-top:auto}
-.bk-label{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--court-d)}
+.bk-label{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--court-d);display:flex;align-items:center;justify-content:space-between;gap:8px}
+/* 背面铅笔：跟 NOTE / 备注 同一行的轻量图标按钮，不套框、不投影 ——
+   卡片本身已经是墨黑描边，再画一个小方框就成「框中框」，视觉重量压过备注正文。
+   默认跟标签同色（court-d），hover 才转球场橙并轻推一下，跟删除按钮的纯 SVG 语言一致。 */
+.bk-edit{flex:0 0 auto;width:22px;height:22px;padding:2px;border:0;background:transparent;color:var(--court-d);cursor:pointer;display:grid;place-items:center;transition:color .12s ease,transform .12s ease}
+.bk-edit:hover{color:var(--court);transform:translate(-1px,-1px)}
+.bk-edit:active{transform:translate(1px,1px)}
+.bk-edit svg{width:16px;height:16px;display:block}
 .bk-note{font-size:12.5px;line-height:1.6;color:var(--ink);margin-top:8px;flex:1;overflow:auto;white-space:pre-wrap;word-break:break-word}
 .bk-status{font-family:var(--mono);font-size:11px;color:var(--soft);margin-bottom:8px}
 .st-done{display:none}
@@ -771,55 +771,6 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
     inset 2px 2px 5px rgba(0,0,0,.30),
     inset -2px -2px 4px rgba(120,80,160,.28)}
 .addbtn:active .svg{transform:scale(.95)}
-/* 阶段性任务「短期 / 中期 / 长期」：交互机制照搬 Uiverse 扇形展开按钮组 ——
-   三块叠在中心、各带不同初始旋转与层级；hover 时分别展开到左/中/右并矫正角度；
-   三个透明热区用兄弟选择器联动：hover 放大 scale(1.05) + 图标提亮，按下 scale(.9)。
-   只换产品语言：球场橙 / 丁香紫 / 薄荷绿 + 墨黑 2px 描边；原版 inset 阴影去掉
-   （按钮一律扁平）；图标换中文双字；尺寸按 32px 标题行等比收窄（192×80→112×36、
-   方块 51→32px、描边 3→2px）。中文不能被方块带着转，故 .icon 反向抵消保持正向。 */
-/* 建立局部层叠上下文压在后续 .track 之上：track 内容顶到 509px，与标题栏
-   490~522 的下半重叠，z:auto 时后面的 track 盖住 button-box 下部热区 → 掠过不展开。 */
-.sec-head.seg-center{position:relative;z-index:2}
-/* 高度与 sec-head-bare(32px) 齐平：原来 44px 会上下溢出，下半被后续卡片轨道
-   .track 覆盖，鼠标从下半掠过时命中 track 而非 touch，导致「有时不展开」。
-   热区 touch 撑满这 32px 即全程可触发；按钮块视觉仍 40px、pointer-events:none 不挡事件。 */
-.button-box{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-  width:140px;height:32px;display:flex}
-.button-box .button{width:40px;height:40px;position:absolute;left:50%;top:50%;
-  cursor:pointer;border:2px solid var(--ink);border-radius:4px;
-  display:flex;justify-content:center;align-items:center;
-  transition:.3s;opacity:.85;pointer-events:none}
-.button-box .button .icon{width:28px;height:18px;line-height:18px;text-align:center;
-  font-family:var(--sans);font-size:11px;font-weight:700;white-space:nowrap;opacity:.7;transition:.25s}
-.button-box .b-short{transform:translate(-50%,-50%) rotate(90deg);z-index:30;background:var(--court);color:var(--paper)}
-.button-box .b-mid{transform:translate(-50%,-50%) rotate(-45deg);z-index:40;background:var(--lilac);color:var(--ink)}
-.button-box .b-long{transform:translate(-50%,-50%) rotate(-115deg);z-index:50;background:var(--mint);color:var(--ink)}
-.button-box .button.on{z-index:55}
-.button-box:hover .button.on,.button-box:focus-within .button.on{outline:2px solid var(--ink);outline-offset:2px}
-.button-box .touch{position:relative;z-index:60;height:100%;flex:1;cursor:pointer}
-.touch:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
-/* 容器 hover：三块全部展开到各自位置并矫正角度 */
-.button-box:hover .b-short,.button-box:focus-within .b-short{transform:translate(-160%,-50%) rotate(-90deg)}
-.button-box:hover .b-mid,.button-box:focus-within .b-mid{transform:translate(-50%,-50%) rotate(0deg)}
-.button-box:hover .b-long,.button-box:focus-within .b-long{transform:translate(60%,-50%) rotate(90deg)}
-/* 中文反向抵消：静止与展开两种角度下都保持正向可读 */
-.button-box .b-short .icon{transform:rotate(-90deg)}
-.button-box .b-mid .icon{transform:rotate(45deg)}
-.button-box .b-long .icon{transform:rotate(115deg)}
-.button-box:hover .b-short .icon,.button-box:focus-within .b-short .icon{transform:rotate(90deg)}
-.button-box:hover .b-mid .icon,.button-box:focus-within .b-mid .icon{transform:rotate(0deg)}
-.button-box:hover .b-long .icon,.button-box:focus-within .b-long .icon{transform:rotate(-90deg)}
-/* 单个热区 hover / active：对应块额外放大或回弹（特异性高于容器展开规则） */
-.touch.left:hover ~ .b-short,.touch.left:focus-visible ~ .b-short{opacity:1;transform:translate(-160%,-50%) rotate(-90deg) scale(1.05)}
-.touch.middle:hover ~ .b-mid,.touch.middle:focus-visible ~ .b-mid{opacity:1;transform:translate(-50%,-50%) rotate(0deg) scale(1.05)}
-.touch.right:hover ~ .b-long,.touch.right:focus-visible ~ .b-long{opacity:1;transform:translate(60%,-50%) rotate(90deg) scale(1.05)}
-.touch.left:hover ~ .b-short .icon,.touch.middle:hover ~ .b-mid .icon,.touch.right:hover ~ .b-long .icon{opacity:.9}
-.touch.left:active ~ .b-short{transform:translate(-160%,-50%) rotate(-90deg) scale(.9)}
-.touch.middle:active ~ .b-mid{transform:translate(-50%,-50%) rotate(0deg) scale(.9)}
-.touch.right:active ~ .b-long{transform:translate(60%,-50%) rotate(90deg) scale(.9)}
-@media (prefers-reduced-motion:reduce){
-  .button-box .button,.button-box .button .icon{transition:none}
-}
 /* 「历史累计」磁贴已改成纯展示（11-17 定）：去掉「档案 ↗」小字、cursor:pointer
    和 hover 变色。它现在和旁边三格一样只读，历史入口只留今日任务标题下的「历史」页签。 */
 .ph-tabs{display:flex;gap:9px;flex:0 0 auto;margin:0 0 12px}
@@ -847,6 +798,16 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .ph-day li{font-size:13px;line-height:1.6;color:var(--ink-2)}
 .ph-day li.done{color:var(--soft);text-decoration:line-through}
 .ph-day li i{display:block;font-style:normal;font-size:11.5px;color:var(--soft);margin-left:16px}
+/* 目标事件流水（11-19）：动作词小胶囊 + 目标名 + 阶段小字。
+   四种动作只换颜色，不换结构 —— added 橙 / done 绿 / undone 灰 / removed 淡红。 */
+.ph-day li.gl-ev{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;padding:2px 0}
+.gl-ev em{font-family:var(--mono);font-size:10px;font-style:normal;letter-spacing:.5px;padding:1px 6px;border:1.5px solid var(--ink);border-radius:8px;white-space:nowrap}
+.gl-added em{background:var(--court);color:#fff}
+.gl-done em{background:var(--mint);color:#0d3b32}
+.gl-undone em{background:var(--paper);color:var(--soft)}
+.gl-removed em{background:var(--mist);color:var(--soft)}
+.gl-ev i{display:inline;font-size:11px;color:var(--soft);margin-left:0}
+.gl-removed{text-decoration:line-through;color:var(--soft)}
    靠留白分组，标题本身就是分隔线。 */
 .ph-acts{display:flex;justify-content:flex-end;margin-top:10px;flex:0 0 auto}
 .cal-cell{position:relative}
@@ -1429,7 +1390,14 @@ body.no-motion .done-burst .db-star{opacity:1;transform:none}
 .tcard .ttl{font-size:14px;font-weight:500;line-height:1.35}
 .tcard.done .ttl{text-decoration:line-through;color:var(--soft)}
 .flip-front .hold-btn{margin-top:auto}
-.bk-label{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--court-d)}
+.bk-label{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--court-d);display:flex;align-items:center;justify-content:space-between;gap:8px}
+/* 背面铅笔：跟 NOTE / 备注 同一行的轻量图标按钮，不套框、不投影 ——
+   卡片本身已经是墨黑描边，再画一个小方框就成「框中框」，视觉重量压过备注正文。
+   默认跟标签同色（court-d），hover 才转球场橙并轻推一下，跟删除按钮的纯 SVG 语言一致。 */
+.bk-edit{flex:0 0 auto;width:22px;height:22px;padding:2px;border:0;background:transparent;color:var(--court-d);cursor:pointer;display:grid;place-items:center;transition:color .12s ease,transform .12s ease}
+.bk-edit:hover{color:var(--court);transform:translate(-1px,-1px)}
+.bk-edit:active{transform:translate(1px,1px)}
+.bk-edit svg{width:16px;height:16px;display:block}
 .bk-note{font-size:12.5px;line-height:1.6;color:var(--ink);margin-top:8px;flex:1;overflow:auto;white-space:pre-wrap;word-break:break-word}
 .bk-status{font-family:var(--mono);font-size:11px;color:var(--soft);margin-bottom:8px}
 .st-done{display:none}
@@ -1534,55 +1502,6 @@ body.no-motion .done-burst .db-star{opacity:1;transform:none}
     inset 2px 2px 5px rgba(0,0,0,.30),
     inset -2px -2px 4px rgba(120,80,160,.28)}
 .addbtn:active .svg{transform:scale(.95)}
-/* 阶段性任务「短期 / 中期 / 长期」：交互机制照搬 Uiverse 扇形展开按钮组 ——
-   三块叠在中心、各带不同初始旋转与层级；hover 时分别展开到左/中/右并矫正角度；
-   三个透明热区用兄弟选择器联动：hover 放大 scale(1.05) + 图标提亮，按下 scale(.9)。
-   只换产品语言：球场橙 / 丁香紫 / 薄荷绿 + 墨黑 2px 描边；原版 inset 阴影去掉
-   （按钮一律扁平）；图标换中文双字；尺寸按 32px 标题行等比收窄（192×80→112×36、
-   方块 51→32px、描边 3→2px）。中文不能被方块带着转，故 .icon 反向抵消保持正向。 */
-/* 建立局部层叠上下文压在后续 .track 之上：track 内容顶到 509px，与标题栏
-   490~522 的下半重叠，z:auto 时后面的 track 盖住 button-box 下部热区 → 掠过不展开。 */
-.sec-head.seg-center{position:relative;z-index:2}
-/* 高度与 sec-head-bare(32px) 齐平：原来 44px 会上下溢出，下半被后续卡片轨道
-   .track 覆盖，鼠标从下半掠过时命中 track 而非 touch，导致「有时不展开」。
-   热区 touch 撑满这 32px 即全程可触发；按钮块视觉仍 40px、pointer-events:none 不挡事件。 */
-.button-box{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-  width:140px;height:32px;display:flex}
-.button-box .button{width:40px;height:40px;position:absolute;left:50%;top:50%;
-  cursor:pointer;border:2px solid var(--ink);border-radius:4px;
-  display:flex;justify-content:center;align-items:center;
-  transition:.3s;opacity:.85;pointer-events:none}
-.button-box .button .icon{width:28px;height:18px;line-height:18px;text-align:center;
-  font-family:var(--sans);font-size:11px;font-weight:700;white-space:nowrap;opacity:.7;transition:.25s}
-.button-box .b-short{transform:translate(-50%,-50%) rotate(90deg);z-index:30;background:var(--court);color:var(--paper)}
-.button-box .b-mid{transform:translate(-50%,-50%) rotate(-45deg);z-index:40;background:var(--lilac);color:var(--ink)}
-.button-box .b-long{transform:translate(-50%,-50%) rotate(-115deg);z-index:50;background:var(--mint);color:var(--ink)}
-.button-box .button.on{z-index:55}
-.button-box:hover .button.on,.button-box:focus-within .button.on{outline:2px solid var(--ink);outline-offset:2px}
-.button-box .touch{position:relative;z-index:60;height:100%;flex:1;cursor:pointer}
-.touch:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
-/* 容器 hover：三块全部展开到各自位置并矫正角度 */
-.button-box:hover .b-short,.button-box:focus-within .b-short{transform:translate(-160%,-50%) rotate(-90deg)}
-.button-box:hover .b-mid,.button-box:focus-within .b-mid{transform:translate(-50%,-50%) rotate(0deg)}
-.button-box:hover .b-long,.button-box:focus-within .b-long{transform:translate(60%,-50%) rotate(90deg)}
-/* 中文反向抵消：静止与展开两种角度下都保持正向可读 */
-.button-box .b-short .icon{transform:rotate(-90deg)}
-.button-box .b-mid .icon{transform:rotate(45deg)}
-.button-box .b-long .icon{transform:rotate(115deg)}
-.button-box:hover .b-short .icon,.button-box:focus-within .b-short .icon{transform:rotate(90deg)}
-.button-box:hover .b-mid .icon,.button-box:focus-within .b-mid .icon{transform:rotate(0deg)}
-.button-box:hover .b-long .icon,.button-box:focus-within .b-long .icon{transform:rotate(-90deg)}
-/* 单个热区 hover / active：对应块额外放大或回弹（特异性高于容器展开规则） */
-.touch.left:hover ~ .b-short,.touch.left:focus-visible ~ .b-short{opacity:1;transform:translate(-160%,-50%) rotate(-90deg) scale(1.05)}
-.touch.middle:hover ~ .b-mid,.touch.middle:focus-visible ~ .b-mid{opacity:1;transform:translate(-50%,-50%) rotate(0deg) scale(1.05)}
-.touch.right:hover ~ .b-long,.touch.right:focus-visible ~ .b-long{opacity:1;transform:translate(60%,-50%) rotate(90deg) scale(1.05)}
-.touch.left:hover ~ .b-short .icon,.touch.middle:hover ~ .b-mid .icon,.touch.right:hover ~ .b-long .icon{opacity:.9}
-.touch.left:active ~ .b-short{transform:translate(-160%,-50%) rotate(-90deg) scale(.9)}
-.touch.middle:active ~ .b-mid{transform:translate(-50%,-50%) rotate(0deg) scale(.9)}
-.touch.right:active ~ .b-long{transform:translate(60%,-50%) rotate(90deg) scale(.9)}
-@media (prefers-reduced-motion:reduce){
-  .button-box .button,.button-box .button .icon{transition:none}
-}
 /* 「历史累计」磁贴已改成纯展示（11-17 定）：去掉「档案 ↗」小字、cursor:pointer
    和 hover 变色。它现在和旁边三格一样只读，历史入口只留今日任务标题下的「历史」页签。 */
 .ph-tabs{display:flex;gap:9px;flex:0 0 auto;margin:0 0 12px}
@@ -1610,6 +1529,16 @@ body.no-motion .done-burst .db-star{opacity:1;transform:none}
 .ph-day li{font-size:13px;line-height:1.6;color:var(--ink-2)}
 .ph-day li.done{color:var(--soft);text-decoration:line-through}
 .ph-day li i{display:block;font-style:normal;font-size:11.5px;color:var(--soft);margin-left:16px}
+/* 目标事件流水（11-19）：动作词小胶囊 + 目标名 + 阶段小字。
+   四种动作只换颜色，不换结构 —— added 橙 / done 绿 / undone 灰 / removed 淡红。 */
+.ph-day li.gl-ev{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px;padding:2px 0}
+.gl-ev em{font-family:var(--mono);font-size:10px;font-style:normal;letter-spacing:.5px;padding:1px 6px;border:1.5px solid var(--ink);border-radius:8px;white-space:nowrap}
+.gl-added em{background:var(--court);color:#fff}
+.gl-done em{background:var(--mint);color:#0d3b32}
+.gl-undone em{background:var(--paper);color:var(--soft)}
+.gl-removed em{background:var(--mist);color:var(--soft)}
+.gl-ev i{display:inline;font-size:11px;color:var(--soft);margin-left:0}
+.gl-removed{text-decoration:line-through;color:var(--soft)}
    靠留白分组，标题本身就是分隔线。 */
 .ph-acts{display:flex;justify-content:flex-end;margin-top:10px;flex:0 0 auto}
 .cal-cell{position:relative}
@@ -2382,4 +2311,19 @@ body.no-motion .done-burst .db-star{opacity:1;transform:none}
   .su-player,.su-title-row b.swap,.su-player.playing .su-knob,
   .su-player.playing .su-knob svg{animation:none}
   .su-prog .su-fill,.su-knob{transition:none}
+}
+
+/* ── 日报历史列表：卡片高度恒定 ─────────────────────────────
+   11-17 用户要求：正文固定显示 3 行，多写的内容截断在框内，不再把卡片撑高。
+   原来只有 max-height:6.2em（4 行），短文本时卡片又会变矮，一屏里每条高度都不一样。
+   现在改成固定 height（= 3 × line-height），无论 1 行还是 5 行，卡片都是同一个高度。
+   数值写成 calc(3 * 1.55em) 而不是 4.65em：以后改 .jbody 的 line-height，这里自动跟着走。
+   截断用 -webkit-line-clamp 加省略号，明确告诉用户「后面还有，点箭头看全文」。 */
+.view[data-view="journal"] .jrow .jbody{
+  height:calc(3 * 1.55em);
+  max-height:none;
+  overflow:hidden;
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:3;
 }
