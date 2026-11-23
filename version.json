@@ -1,13 +1,13 @@
 {
-  "version": "3.0.3",
-  "notes": "· 修修补补了些BUG，\n· 个人计划分成「今日待办」和「长期目标」\n· 完成的任务自动沉到最后，新加的排最前面。\n· 界面去掉了一堆没用的文字，舒服了，干净。\n· 瑞幸的云岭红茶拿铁味道不错。\n·最近追短剧《我叫半斤它叫八两》上瘾，赶紧去看吧。",
+  "version": "3.0.4",
+  "notes": "· 新增「小工具」和第一个计算器，加减乘除、百分比、键盘都能按\n· 侧栏顺序可以自己拖着排了，松手就记住\n· 去掉了阅读打卡和每日锻炼（没人用，我又不用，留着干啥）\n· 更新失败的页面换了个顺眼的样子\n· 修了一堆升级和稳定性的小毛病\n· 买了莫吉托辣塔克味的拌面，不好吃，就是酸橙味，整个莫名其妙的名字\n· 住的地方洗脸盆接了热水管，舒服了",
   "downloadUrl": "https://github.com/real-kunkun/RealIKUN/releases",
-  "publishedAt": "2026-11-20",
-  "url": "https://kunkundaily-1533457423.cos.ap-shanghai.myqcloud.com/kunkun-daily-3.0.3.7z",
+  "publishedAt": "2026-11-23",
+  "url": "https://kunkundaily-1533457423.cos.ap-shanghai.myqcloud.com/kunkun-daily-3.0.4.7z",
   "mirrors": [
-    "https://github.com/real-kunkun/RealIKUN/releases/download/v3.0.3/kunkun-daily-3.0.3.7z",
-    "https://gh-proxy.com/https://github.com/real-kunkun/RealIKUN/releases/download/v3.0.3/kunkun-daily-3.0.3.7z",
-    "https://ghproxy.net/https://github.com/real-kunkun/RealIKUN/releases/download/v3.0.3/kunkun-daily-3.0.3.7z"
+    "https://github.com/real-kunkun/RealIKUN/releases/download/v3.0.4/kunkun-daily-3.0.4.7z",
+    "https://gh-proxy.com/https://github.com/real-kunkun/RealIKUN/releases/download/v3.0.4/kunkun-daily-3.0.4.7z",
+    "https://ghproxy.net/https://github.com/real-kunkun/RealIKUN/releases/download/v3.0.4/kunkun-daily-3.0.4.7z"
   ],
-  "sha256": "c7db19dfa7bfb41c8878c851b956ab25958f44b50458f1bfdaff5be6db8d302d"
+  "sha256": "c2a0210da3d7014297686b200f58bfaf2fe677d8574bdcc6c2b456c0bffe9838"
 }

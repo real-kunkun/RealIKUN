@@ -1,6 +1,6 @@
 {
   "name": "todo-daily",
-  "version": "3.0.3",
+  "version": "3.0.4",
   "description": "坤坤日报 · 练习室",
   "main": "main.js",
   "updateUrl": "https://raw.githubusercontent.com/real-kunkun/RealIKUN/main/version.json",

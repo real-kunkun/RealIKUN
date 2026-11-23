@@ -1,8 +1,8 @@
 /* 3.0.0：数据不再放 localStorage，改由主进程写入 todo-data.json。
    渲染层只认 window.todoAPI.loadData / saveData，结构定义见 data-layer.js。 */
 var api=window.todoAPI||null;
-var S={todos:[],ideas:[],habits:[],books:[],curBook:0,readDays:{},ledger:[],moodLog:[],moodPick:0,
-       journal:"",journals:[],settings:{motion:true,autoStart:false,keepRunning:false},seeded:false,
+var S={todos:[],ideas:[],ledger:[],moodLog:[],moodPick:0,
+       journal:"",journals:[],settings:{motion:true,autoStart:false,keepRunning:false,navOrder:[]},seeded:false,
        planDays:{},goalLog:[],lastPlanDay:''};
 var $=function(s,r){return (r||document).querySelector(s);};
 var ce=function(t,c){var e=document.createElement(t);if(c)e.className=c;return e;};
@@ -171,36 +171,19 @@ if(!S.todos.length)S.todos=[
  {t:"提升团队协作效率",k:"imp",note:"周会流程",done:false,hor:"long",ten:"持续 22 天"}
 ];
 if(!S.ideas.length)S.ideas=[{t:"做一个 ikun 主题的开屏动画"},{t:"周报模板化，省半小时"},{t:"周末拍组练习室 vlog"}];
-/* 打卡历史用 { 'YYYY.MM.DD': 1 } 存，done 只作为当日派生值兼容旧数据 */
-if(!S.habits.length)S.habits=[{ic:"🏀",nm:"投篮 50 个"},{ic:"💪",nm:"力量训练"},{ic:"🏃",nm:"慢跑 3km"},{ic:"🧘",nm:"拉伸放松"}];
-S.habits.forEach(function(h){
-  if(!h.hist)h.hist={};
-  if(h.done&&!h.hist[dayKey(TODAY())])h.hist[dayKey(TODAY())]=1;
-  delete h.done;
-});
-if(!S.book)S.book={nm:"认知觉醒",cur:8,total:12};
-/* 书架：从单本升级成多本；老的 S.book 自动变成第一本 */
-if(!S.books||!S.books.length)S.books=[{id:1,nm:"认知觉醒",cur:8,total:12,cv:"#E8552D"},{id:2,nm:"被讨厌的勇气",cur:3,total:10,cv:"#7C5CBF"}];
-if(!S.curBook)S.curBook=S.books[0].id;
-if(!S.readDays)S.readDays={};
 if(!S.ledger.length)S.ledger=[{d:"早餐",a:-18,ts:(TODAY().getTime()-3*86400000)},{d:"打车",a:-24,ts:(TODAY().getTime()-2*86400000)},{d:"咖啡",a:-28,ts:(TODAY().getTime()-1*86400000)},{d:"超市采购",a:-86,ts:(TODAY().getTime()-4*86400000)},{d:"午饭",a:-32,ts:(TODAY().getTime()-6*86400000)},{d:"工资入账",a:8000,ts:(TODAY().getTime()-12*86400000)},{d:"兼职稿费",a:600,ts:(TODAY().getTime()-30*86400000)}];
 if(!S.moodLog)S.moodLog=[];
 if(!S.moodPick)S.moodPick=4;
 /* 一次性铺点演示数据（只在首次生成时写，之后用户改成什么样就留什么样） */
 if(!S.seeded){
   S.seeded=1;
-  [[0,1,2],[0,2],[1],[0,1]].forEach(function(offs,hi){
-    if(!S.habits[hi])return;
-    offs.forEach(function(o){S.habits[hi].hist[dayKey(shiftDay(TODAY(),-o))]=1;});
-  });
-  [1,2,3].forEach(function(o){S.readDays[dayKey(shiftDay(TODAY(),-o))]=1;});
   S.moodLog=[{ts:(TODAY().getTime()-86400000+21*3600000),m:4,t:"今天练完球心情很好，投进了三个三分。"},
              {ts:(TODAY().getTime()-3*86400000+23*3600000),m:2,t:"PPT 改到第三版还是不满意，有点烦。"}];
 }
 }
 
 /* 【一次性清理历史演示数据 · 11-17】
-   历史版本新装用户被 seedDemo 灌过 12 条假待办 / 3 条灵感 / 4 个假习惯 / 2 本假书 /
+   历史版本新装用户被 seedDemo 灌过 12 条假待办 / 3 条灵感 / 4 个假习惯 /
    7 笔假账（含 30 天前的「兼职稿费」，是「第 31 天练习」的来源）/ 2 条假心情。
    即使 seedDemo 已停用，这些已落盘的数据也不会自己消失。
    本函数只删「标题 / 金额 / 文本完全匹配种子特征」的条目 —— 用户改过的、或后来
@@ -213,8 +196,6 @@ function cleanLegacyDemo(){
     '健身 40 分钟','记账今日支出','回复合作邮件','灵感墙贴一张','整理项目文档',
     '学习 React 新特性','读完《认知觉醒》','提升团队协作效率'];
   var ID=['做一个 ikun 主题的开屏动画','周报模板化，省半小时','周末拍组练习室 vlog'];
-  var HB=['投篮 50 个','力量训练','慢跑 3km','拉伸放松'];
-  var BK=['认知觉醒','被讨厌的勇气'];
   var LG=['早餐|-18','打车|-24','咖啡|-28','超市采购|-86','午饭|-32','工资入账|8000','兼职稿费|600'];
   var MD=['今天练完球心情很好，投进了三个三分。','PPT 改到第三版还是不满意，有点烦。'];
   function strip(arr,keys,field){
@@ -224,17 +205,11 @@ function cleanLegacyDemo(){
   }
   strip(S.todos,TD,'t');
   strip(S.ideas,ID,'t');
-  strip(S.habits,HB,'nm');
-  strip(S.books,BK,'nm');
   strip(S.moodLog,MD,'t');
   if(Array.isArray(S.ledger)){
     var keep=S.ledger.filter(function(x){return LG.indexOf(String(x&&x.d)+'|'+String(x&&x.a))<0;});
     if(keep.length!==S.ledger.length){S.ledger.length=0;Array.prototype.push.apply(S.ledger,keep);}
   }
-  /* 旧的单本 book 字段也是演示值，一并清掉（UI 不读它，清了不影响显示） */
-  if(S.book&&S.book.nm==='认知觉醒'&&S.book.cur===8&&S.book.total===12)delete S.book;
-  /* 演示书删光后，curBook 会悬空，归零；baseNormalize 也会兜底修正 */
-  if((!S.books||!S.books.length)&&S.curBook)S.curBook=0;
   S.demoCleaned=1;
   return true;   /* 标记本身也要落盘，所以无论是否真删了东西都要 save 一次 */
 }
@@ -257,6 +232,7 @@ function replayViewAnim(){
   vb.getAnimations().forEach(function(a){try{a.cancel();a.play();}catch(e){}});
 }
 function switchView(v){
+  document.body.classList.remove('shoot-frozen');   // 真实切换视图 → 解冻篮球，允许新选中项正常投篮
   document.querySelectorAll('.view').forEach(function(x){x.classList.toggle('on',x.dataset.view===v);});
   document.querySelectorAll('[data-go]').forEach(function(b){b.classList.toggle('on',b.dataset.go===v);});
   replayViewAnim();
@@ -748,167 +724,6 @@ function renderIdeas(){
   });
 }
 
-/* 锻炼：今日打卡 + 本周 7 格 + 连续天数 + 本周统计 + 近 7 天明细 */
-function weekDays(){
-  /* 本周（周一起）7 天 */
-  var t=TODAY(),dow=(t.getDay()+6)%7;          /* 周一=0 */
-  var mon=shiftDay(t,-dow),arr=[];
-  for(var i=0;i<7;i++)arr.push(shiftDay(mon,i));
-  return arr;
-}
-function habitStreak(h){
-  var n=0,d=TODAY();
-  /* 今天没打卡就从昨天开始数，不让当天未打把连续天数清成 0 */
-  if(!h.hist[dayKey(d)])d=shiftDay(d,-1);
-  while(h.hist[dayKey(d)]){n++;d=shiftDay(d,-1);}
-  return n;
-}
-function toggleHabitDay(h,d){
-  var k=dayKey(d);
-  if(h.hist[k])delete h.hist[k];else h.hist[k]=1;
-  save();renderHabits();
-}
-function renderHabits(){
-  var l=$('#habitList');l.innerHTML='';
-  var td=TODAY(),tdk=dayKey(td),wk=weekDays();
-  if(!S.habits.length)l.innerHTML='<div class="hempty">还没有锻炼目标，点右上角「＋ 新建目标」加一个</div>';
-  S.habits.forEach(function(h){
-    h.hist=h.hist||{};
-    var st=habitStreak(h),done=!!h.hist[tdk];
-    var r=ce('div','hrow');
-    var strip=wk.map(function(d,i){
-      var on=!!h.hist[dayKey(d)],cls=''+(on?' on':'')+(dayKey(d)===tdk?' td':'');
-      return '<i class="'+cls+'" data-day="'+dayKey(d)+'" title="'+dayKey(d)+'">'+['一','二','三','四','五','六','日'][i]+'</i>';
-    }).join('');
-    r.innerHTML='<div class="ico">'+esc(h.ic)+'</div>'+
-      '<div class="nm">'+esc(h.nm)+'<b>连续 '+st+' 天</b></div>'+
-      '<div class="wstrip" title="本周打卡，点一下可补打">'+strip+'</div>'+
-      '<button class="hdel" type="button" title="删除「'+esc(h.nm)+'」">✕</button>'+
-      '<div class="box'+(done?' on':'')+'">'+(done?'✓':'')+'</div>';
-    r.querySelector('.box').addEventListener('click',function(){
-      toggleHabitDay(h,td);toast(done?'已取消今天的打卡':'打卡成功 🏀');
-    });
-    r.querySelector('.hdel').addEventListener('click',function(e){
-      e.stopPropagation();
-      var idx=S.habits.indexOf(h),nm=h.nm;
-      confirmDelete('删除「'+nm+'」？它的打卡记录也会一起删掉',function(){
-        if(idx>-1)S.habits.splice(idx,1);
-        save();renderHabits();toast('已删除「'+nm+'」');
-      });
-    });
-    r.querySelectorAll('.wstrip i').forEach(function(el){
-      el.addEventListener('click',function(){
-        var p=el.dataset.day.split('.').map(Number);
-        toggleHabitDay(h,new Date(p[0],p[1]-1,p[2]));
-      });
-    });
-    l.appendChild(r);
-  });
-  /* 统计 */
-  var total=S.habits.length*7,got=0,best=0,todayN=0;
-  S.habits.forEach(function(h){
-    h.hist=h.hist||{};
-    var s=habitStreak(h);if(s>best)best=s;
-    if(h.hist[tdk])todayN++;
-    wk.forEach(function(d){if(h.hist[dayKey(d)])got++;});
-  });
-  var rate=total?Math.round(got/total*100):0;
-  $('#habCnt').textContent=todayN+' / '+S.habits.length;
-  $('#habWeek').textContent=got+' / '+total;
-  $('#habToday').textContent=todayN;
-  $('#habBest').textContent=best+' 天';
-  $('#habRate').textContent=rate+'%';
-  $('#habTip').textContent=rate>=80?'这周够狠，保持住':'';
-  /* 近 14 天柱状：当天完成了几项 */
-  var bars='';
-  for(var i=13;i>=0;i--){
-    var d=shiftDay(td,-i),n=0;
-    S.habits.forEach(function(h){if(h.hist[dayKey(d)])n++;});
-    var pct=S.habits.length?Math.round(n/S.habits.length*100):0;
-    bars+='<i'+(i===0?' class="td"':'')+' title="'+dayKey(d)+' · '+n+' 项"><b style="height:'+pct+'%"></b></i>';
-  }
-  $('#habBars').innerHTML=bars;
-  /* 近 7 天明细 */
-  var hist='';
-  for(var j=0;j<7;j++){
-    var dd=shiftDay(td,-j),done=[];
-    S.habits.forEach(function(h){if(h.hist[dayKey(dd)])done.push(h.ic);});
-    var wd=['日','一','二','三','四','五','六'][dd.getDay()];
-    hist+='<div class="hist-row'+(done.length?'':' empty')+'"><span class="dt">'+(j===0?'今天':(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+wd)+
-      '</span><span class="em">'+(done.length?esc(done.join(' ')):'没练')+'</span><span class="n">'+done.length+'/'+S.habits.length+'</span></div>';
-  }
-  $('#habHist').innerHTML=hist;
-}
-
-/* 阅读：书架多本 + 每日打卡 */
-function renderBook(){
-  var sh=$('#shelf');if(!sh)return;
-  sh.innerHTML='';
-  S.books.forEach(function(b){
-    /* 总章数可能是 0（旧数据没填 / 用户跳过），除法会得到 NaN，
-       进度条宽度写成 "NaN%" 会整条失效，这里统一按 0% 处理 */
-    var pct=b.total>0?Math.round(b.cur/b.total*100):0;
-    var it=ce('div','shelf-item'+(b.id===S.curBook?' on':''));
-    it.innerHTML='<div class="cv" style="background:'+(b.cv||'#E8552D')+'">'+esc(b.nm.slice(0,2))+'</div>'+
-      '<div class="mid"><h4>'+esc(b.nm)+'</h4>'+
-      '<div class="pg2">第 '+b.cur+' / '+b.total+' 章 · '+pct+'%</div>'+
-      '<div class="bar2"><i style="width:'+pct+'%"></i></div></div>'+
-      '<div class="acts"><button class="jbtn" data-up>＋1 章</button><button class="jbtn ghost" data-fin>读完</button></div>';
-    it.addEventListener('click',function(e){
-      if(e.target.closest('button'))return;
-      S.curBook=b.id;save();renderBook();
-    });
-    it.querySelector('[data-up]').addEventListener('click',function(){
-      if(!b.total){toast('这本还没填总章数，先点「读完」');return;}
-      if(b.cur<b.total){b.cur++;save();renderBook();toast('进度 +1 📖');}else toast('这本已经读完啦');
-    });
-    it.querySelector('[data-fin]').addEventListener('click',function(){
-      if(!b.total){toast('这本还没填总章数');return;}
-      if(b.cur===b.total){toast('这本已经读完啦');return;}
-      b.cur=b.total;save();renderBook();toast('读完啦 🎉 铁山靠');
-    });
-    sh.appendChild(it);
-  });
-  var cur=S.books.filter(function(b){return b.id===S.curBook;})[0]||S.books[0];
-  $('#shelfCnt').textContent=S.books.length+' 本';
-
-  /* 本周打卡格 */
-  var td=dayKey(TODAY()),wk=weekDays(),g='',cnt=0;
-  var labs=['一','二','三','四','五','六','日'];
-  wk.forEach(function(d,i){
-    var k=dayKey(d),on=!!S.readDays[k];if(on)cnt++;
-    g+='<button type="button" class="'+(on?'on':'')+(k===td?' td':'')+'" data-day="'+k+'">'+
-       '<span>周'+labs[i]+'</span><span class="dot"></span><span style="font-family:var(--mono);font-size:10px">'+d.getDate()+'</span></button>';
-  });
-  $('#readGrid').innerHTML=g;
-  $('#readGrid').querySelectorAll('button').forEach(function(btn){
-    btn.addEventListener('click',function(){
-      var k=btn.dataset.day;
-      if(S.readDays[k])delete S.readDays[k];else S.readDays[k]=1;
-      save();renderBook();toast(S.readDays[k]?'打卡成功 📚':'已取消打卡');
-    });
-  });
-  $('#readWeek').textContent=cnt+' / 7';
-
-  /* 近 7 天明细 */
-  var hist='';
-  for(var j=0;j<7;j++){
-    var dd=shiftDay(TODAY(),-j),on=S.readDays[dayKey(dd)];
-    var wd=['日','一','二','三','四','五','六'][dd.getDay()];
-    hist+='<div class="hist-row'+(on?'':' empty')+'"><span class="dt">'+(j===0?'今天':(dd.getMonth()+1)+'.'+dd.getDate()+' 周'+wd)+
-      '</span><span class="em">'+(on?'读了《'+esc(cur?cur.nm:'')+'》':'没读')+'</span><span class="n">'+(on?'✓':'—')+'</span></div>';
-  }
-  $('#readHist').innerHTML=hist;
-}
-var newBookBtn=$('#newBook');
-if(newBookBtn)newBookBtn.addEventListener('click',function(){
-  var nm=prompt('新书的名字？');
-  if(!nm||!nm.trim())return;
-  var t=Math.max(1,parseInt(prompt('一共几章？','12'),10)||12);   /* 至少 1 章：0 章的书没有进度可言 */
-  S.books.push({id:Date.now(),nm:nm.trim(),cur:0,total:t,cv:['#E8552D','#7C5CBF','#46B59A','#D9A441'][S.books.length%4]});
-  save();renderBook();toast('上架一本 📚');
-});
-
 /* 记账 */
 var ledF='all';
 function renderLedger(){
@@ -1321,10 +1136,6 @@ document.querySelectorAll('[data-add]').forEach(function(b){b.addEventListener('
   else if(t==='ledger')openModal('记一笔',{amount:true,ph:'这笔是啥，如：午餐',ctx:{type:'ledger'}});
   else openModal('新增任务',{area:true,cat:true,pool:true,ph:'想做点啥…',ctx:{type:'todo',hor:(t==='today'?'today':'goal')}});
 });});
-var newHabitBtn=$('#newHabit');
-if(newHabitBtn)newHabitBtn.addEventListener('click',function(){
-  openModal('新建锻炼目标',{ph:'比如：跳绳 200 个、平板支撑 3 组',ctx:{type:'habit'}});
-});
 $('#modalCancel').addEventListener('click',closeModal);
 modalBg.addEventListener('click',function(e){if(e.target===modalBg)closeModal();});
 $('#modalOk').addEventListener('click',function(){
@@ -1336,12 +1147,6 @@ $('#modalOk').addEventListener('click',function(){
     if(!v){toast('先写点东西嘛');return;}
     S.ideas.push({t:v});
     save();closeModal();renderIdeas();toast('已贴上墙 🎧');
-  } else if(pending.type==='habit'){
-    if(!v){toast('先写个目标名嘛');return;}
-    /* 图标按已有数量轮换，不打断新增流程 */
-    var HICON=['🏀','💪','🏃','🧘','🚴','🤸','🏋️','⛹️','🪢','🥊','🦵','🧗'];
-    S.habits.push({ic:HICON[S.habits.length%HICON.length],nm:v,hist:{}});
-    save();closeModal();renderHabits();toast('目标已加进打卡清单 🏀');
   } else if(pending.type==='note'){
     /* 补写备注：只改这一个数据对象的 note 和当前卡片的文字节点。
        不 renderTodos —— 整卡重建会翻回正面、打断刚写完就看到结果的反馈。 */
@@ -1442,10 +1247,6 @@ function doSearch(q){
       res.push({v:'journal',tag:'日报',t:(it.date||'')+' · '+(it.text||'').replace(/\s+/g,' ').slice(0,60)});
   });
   S.ideas.forEach(function(it){if((it.t||'').toLowerCase().indexOf(ql)>=0)res.push({v:'ideas',tag:'灵感',t:it.t});});
-  S.habits.forEach(function(h){if((h.nm||'').toLowerCase().indexOf(ql)>=0)res.push({v:'habits',tag:'习惯',t:(h.ic||'')+' '+h.nm});});
-  (S.books||[]).forEach(function(b){
-    if((b.nm||'').toLowerCase().indexOf(ql)>=0)res.push({v:'reading',tag:'阅读',t:'《'+b.nm+'》 已读 '+b.cur+'/'+b.total});
-  });
   S.ledger.forEach(function(e){if((e.d||'').toLowerCase().indexOf(ql)>=0)res.push({v:'ledger',tag:'账本',t:e.d+' '+(e.a>0?'+':'')+e.a+' 元'});});
   /* 计划历史（今日任务）：仍从 planDays.items 快照找 */
   Object.keys(S.planDays||{}).forEach(function(k){
@@ -1977,7 +1778,8 @@ if(wnOkBtn)wnOkBtn.addEventListener('click',function(){
   $('#wnBg').classList.remove('on');
 });
 function bootRender(){
-  renderTodos();renderIdeas();renderHabits();renderBook();renderLedger();renderMood();
+  applyNavOrder();   /* 先按保存的顺序重排侧栏导航（不改节点只移动，click 绑定仍有效） */
+  renderTodos();renderIdeas();renderLedger();renderMood();
   renderJournals();     /* 数据是异步取回的，启动时必须重画一次历史日报 */
   paintHolidayCard();
   paintHeader();
@@ -2202,18 +2004,42 @@ if(upNow)upNow.addEventListener('click',function(){
 });
 if(api&&api.onUpdateProgress)api.onUpdateProgress(renderUpProgress);
 if(api&&api.onUpdateAvailable)api.onUpdateAvailable(function(info){openUpdate(info);});
-if(setUpdateBtn)setUpdateBtn.addEventListener('click',function(){
-  if(!api||!api.checkUpdate){toast('这个功能只在桌面客户端里可用');return;}
-  setUpdateBtn.disabled=true;setUpdateBtn.textContent='开团中';
+
+/* 检查更新：设置里的「开团」和失败弹窗的「再试一次」共用，避免两份逻辑走偏。
+   onDone 用来在检查结束后复位按钮（失败弹窗那条要恢复可点）。 */
+function doCheckUpdate(onDone){
+  if(!api||!api.checkUpdate){toast('这个功能只在桌面客户端里可用');if(onDone)onDone();return;}
   api.checkUpdate().then(function(r){
-    setUpdateBtn.disabled=false;setUpdateBtn.textContent='开团';
+    if(onDone)onDone();
     if(!r||r.ok===false){toast('连不上更新服务器，待会儿再试');return;}
     if(r.hasUpdate){openUpdate(r.info||{version:r.latest});}
     else toast('已经是最新的 '+r.current+' 啦 🏀');
   }).catch(function(){
-    setUpdateBtn.disabled=false;setUpdateBtn.textContent='开团';
+    if(onDone)onDone();
     toast('连不上更新服务器，待会儿再试');
   });
+}
+if(setUpdateBtn)setUpdateBtn.addEventListener('click',function(){
+  setUpdateBtn.disabled=true;setUpdateBtn.textContent='开团中';
+  doCheckUpdate(function(){setUpdateBtn.disabled=false;setUpdateBtn.textContent='开团';});
+});
+
+/* 更新回滚提示：主进程检测到 update-failed.flag 后推过来，用应用内弹窗显示。
+   取代原来的原生 dialog —— 原生弹窗跟漫画风是两套语言，用户反馈太丑。 */
+function openUpdateFail(payload){
+  var bg=$('#failBg');if(!bg)return;
+  var info=(payload&&payload.info)||'';
+  $('#failLog').textContent=info?('失败记录 · '+info):'';
+  bg.classList.add('on');
+}
+function closeUpdateFail(){var bg=$('#failBg');if(bg)bg.classList.remove('on');}
+if(api&&api.onUpdateRollback)api.onUpdateRollback(function(payload){openUpdateFail(payload);});
+var failLater=$('#failLater'),failRetry=$('#failRetry');
+if(failLater)failLater.addEventListener('click',closeUpdateFail);
+if(failRetry)failRetry.addEventListener('click',function(){
+  closeUpdateFail();
+  failRetry.disabled=true;
+  doCheckUpdate(function(){failRetry.disabled=false;});
 });
 
 /* 弹窗性能：打开时暂停背景常驻循环动效（hero 图标 / 拍球 / 顶栏标签）。
@@ -2231,4 +2057,279 @@ if(setUpdateBtn)setUpdateBtn.addEventListener('click',function(){
     mo.observe(document.body,{subtree:true,attributes:true,attributeFilter:['class']});
   }catch(e){}
   sync();
+})();
+
+/* ═══════════════ 小工具 · 计算器 ═══════════════
+   纯临时状态，不进 S、不落盘 —— 关掉重开从 0 开始，符合工具类预期，
+   也不碰 data-layer.js / SCHEMA_VERSION（线上 3.0.1 老用户升级后数据一字节不动）。
+   两层结构：工具箱入口 .tool-home ⇄ 计算器 .calc-app，靠 hidden 切换，不走 switchView。 */
+(function(){
+  var home=$('#toolHome'),app=$('#calcApp');
+  if(!home||!app)return;
+  var vEl=$('#calcValue'),eEl=$('#calcExpr');
+
+  // 计算器状态：acc=累积值(数字)，cur=当前输入(字符串)，op=待算运算符，
+  // expr=等号上方那行小字，fresh=下一数字是否清空当前输入，lastOp/lastVal 支持连按等号。
+  var acc=null,cur='0',op=null,expr='',fresh=true,lastOp=null,lastVal=null;
+
+  function fmt(n){
+    if(!isFinite(n))return '错误';
+    // 抹掉 0.1+0.2 这类浮点尾数：保留 12 位有效数字后再转字符串
+    var s=Number(n.toPrecision(12)).toString();
+    if(s.length>15)s=Number(n.toExponential(8)).toString();
+    return s;
+  }
+  function readableCur(){return cur;}
+  function render(){
+    vEl.textContent=readableCur();
+    eEl.innerHTML=expr?escapeHtml(expr):'&nbsp;';
+  }
+  function escapeHtml(s){return String(s).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
+  function setExpr(t){expr=t;}
+
+  function inputDigit(d){
+    if(fresh){cur=(d==='.'?'0.':d);fresh=false;}
+    else{
+      if(d==='.'){if(cur.indexOf('.')>=0)return;cur+='.';}
+      else{cur=(cur==='0'?d:cur+d);}
+    }
+    if(cur.length>15)cur=cur.slice(0,15);
+    render();
+  }
+  function compute(a,b,o){
+    switch(o){
+      case '+':return a+b;
+      case '-':return a-b;
+      case '*':return a*b;
+      case '/':return b===0?NaN:a/b;
+    }
+    return b;
+  }
+  function doOp(nextOp){
+    var v=parseFloat(cur);
+    if(op!==null&&!fresh){
+      var r=compute(acc,v,op);
+      if(!isFinite(r)){cur='错误';acc=null;op=null;fresh=true;setExpr('');render();return;}
+      acc=r;cur=fmt(r);
+    }else{
+      acc=v;
+    }
+    op=nextOp;fresh=true;lastOp=null;
+    setExpr(fmt(acc)+' '+({'+':'+','-':'−','*':'×','/':'÷'}[nextOp]||''));
+    render();
+  }
+  function equals(){
+    var v=parseFloat(cur);
+    var o=op!==null?op:lastOp;
+    var base=op!==null?acc:(lastVal!==null?lastVal:v);
+    if(o===null||!isFinite(base))return;
+    var r=compute(base,v,o);
+    if(!isFinite(r)){cur='错误';acc=null;op=null;fresh=true;lastOp=null;lastVal=null;setExpr('');render();return;}
+    setExpr(fmt(base)+' '+({'+':'+','-':'−','*':'×','/':'÷'}[o]||'')+' '+fmt(v)+' =');
+    cur=fmt(r);acc=null;op=null;fresh=true;
+    lastOp=o;lastVal=v;   // 连按 = → 用同一个运算符和最后的数继续算
+    render();
+  }
+  function pct(){
+    var v=parseFloat(cur);
+    // 有运算符时按「acc 的百分比」算（如 200 + 10% = 220），否则按本身的 1/100
+    if(op!==null&&acc!==null)v=acc*v/100;
+    else v=v/100;
+    cur=fmt(v);fresh=false;render();
+  }
+  function sign(){
+    if(cur==='0'||cur==='错误')return;
+    cur=cur.charAt(0)==='-'?cur.slice(1):'-'+cur;
+    render();
+  }
+  function backspace(){
+    if(fresh)return;
+    cur=cur.length<=1||(cur.length===2&&cur.charAt(0)==='-')?'0':cur.slice(0,-1);
+    render();
+  }
+  function clearAll(){acc=null;cur='0';op=null;expr='';fresh=true;lastOp=null;lastVal=null;render();}
+
+  function press(k){
+    if(k==='ac'){clearAll();return;}
+    if(k==='sign'){sign();return;}
+    if(k==='pct'){pct();return;}
+    if(k==='back'){backspace();return;}
+    if(k==='='){equals();return;}
+    if(k==='+'||k==='-'||k==='*'||k==='/'){doOp(k);return;}
+    if(k==='.'){inputDigit('.');return;}
+    if(/^\d$/.test(k)){inputDigit(k);return;}
+  }
+
+  // 按钮点击（事件委托，键盘外的所有键）
+  $('#calcKeys').addEventListener('click',function(e){
+    var b=e.target.closest('[data-k]');if(b)press(b.dataset.k);
+  });
+  // 进入 / 返回
+  document.querySelectorAll('[data-tool]').forEach(function(card){
+    card.addEventListener('click',function(){
+      if(card.dataset.tool!=='calc')return;
+      clearAll();home.hidden=true;app.hidden=false;
+      replayViewAnim();
+    });
+  });
+  $('#calcBack').addEventListener('click',function(){app.hidden=true;home.hidden=false;});
+
+  // 键盘：只在计算器面板可见时接管；目标落在输入框/文本域时先让位
+  document.addEventListener('keydown',function(e){
+    if(app.hidden||!$('#calcApp').offsetParent)return;
+    var t=e.target&&e.target.tagName;
+    if(t==='INPUT'||t==='TEXTAREA')return;
+    var k=e.key;
+    var map={Enter:'=',Escape:'ac',Backspace:'back','×':'*','÷':'/','−':'-'};
+    k=map[k]||k;
+    if(/^[0-9]$/.test(k)||k==='.'||k==='+'||k==='-'||k==='*'||k==='/'||k==='='||k==='ac'||k==='back'){
+      e.preventDefault();press(k);
+    }
+    // % 键（Shift+5）单独放行
+    if(k==='%'){e.preventDefault();press('pct');}
+  });
+
+  render();
+})();
+
+/* ═══════════════ 侧栏导航：手动拖动排序 ═══════════════
+   6 个 [data-go] 按钮按用户拖出的顺序排列，顺序存 S.settings.navOrder（数据层已做
+   白名单归一化，老用户无该字段时用默认顺序，不碰核心数据、不升 SCHEMA_VERSION）。
+   只移动现有节点、不重建 → 原有的 click→switchView 绑定天然保留。 */
+function applyNavOrder(){
+  var nav=$('#nav');if(!nav)return;
+  var order=(S.settings&&S.settings.navOrder)||[];
+  if(!Array.isArray(order)||!order.length)return;
+  var byKey={};
+  Array.prototype.forEach.call(nav.querySelectorAll('[data-go]'),function(b){byKey[b.dataset.go]=b;});
+  order.forEach(function(k){if(byKey[k])nav.appendChild(byKey[k]);});
+}
+(function(){
+  var nav=$('#nav');if(!nav)return;
+  var THRESH=5,drag=null,suppressClick=false,raf=0;
+  // 弹簧参数：stiff 越大回弹越快，damp 越小晃得越久。取一组手感稳、收敛快的。
+  var STIFF=0.22,DAMP=0.74,EPS=0.4;
+  function items(){return Array.prototype.slice.call(nav.querySelectorAll('[data-go]'));}
+
+  function springStep(st,target){
+    // st={x,v}：x=当前位移(px)，v=速度。向 target 逼近，返回是否已稳定。
+    var d=target-st.x;
+    st.v=(st.v+d*STIFF)*DAMP;
+    st.x+=st.v;
+    if(Math.abs(d)<EPS&&Math.abs(st.v)<EPS){st.x=target;st.v=0;return true;}
+    return false;
+  }
+
+  nav.addEventListener('pointerdown',function(e){
+    if(e.button!==0||!e.isPrimary)return;
+    var grip=e.target.closest('.nav-grip');
+    if(!grip)return;
+    var btn=grip.closest('[data-go]');
+    if(!btn||!nav.contains(btn))return;
+    drag={btn:btn,id:e.pointerId,startY:e.clientY,py:e.clientY,moved:false,
+          list:null,origIdx:-1,H:0,ph:null,offs:[],springs:[],slot:0};
+    try{btn.setPointerCapture(e.pointerId);}catch(_){}
+  });
+
+  function begin(){
+    var btn=drag.btn,list=items(),idx=list.indexOf(btn);
+    if(idx<0)return false;
+    var rects=list.map(function(b){return b.getBoundingClientRect();});
+    // 行距：优先用相邻 top 差，兜底用自身高度
+    var H=rects.length>1?Math.abs(rects[1].top-rects[0].top):rects[0].height+8;
+    if(!(H>0))H=rects[0].height+8;
+    // 占位符：顶住被拖项原位（被拖项 absolute 脱离流后，占位补上，布局不塌陷）
+    var ph=document.createElement('div');ph.className='nav-ph';
+    ph.style.height=rects[idx].height+'px';
+    btn.parentNode.insertBefore(ph,btn.nextElementSibling);
+    // 每项的自然 top 必须在「占位符插入后」读取，这样 offs 就是最终布局基准
+    var others=list.filter(function(b){return b!==btn;});
+    var offs=others.map(function(b){return b.getBoundingClientRect().top;});
+    drag.list=list;drag.origIdx=idx;drag.H=H;drag.ph=ph;drag.offs=offs;
+    drag.others=others;
+    // 每项的弹簧状态：x=相对自然位的位移
+    drag.springs=others.map(function(){return {x:0,v:0};});
+    // 被拖项脱离文档流，浮在原地，尺寸锁死。absolute 相对 nav(relative)，坐标要换算
+    var r=rects[idx],nr=nav.getBoundingClientRect();
+    btn.classList.add('dragging');
+    btn.style.width=r.width+'px';btn.style.height=r.height+'px';
+    btn.style.left=(r.left-nr.left)+'px';btn.style.top=(r.top-nr.top)+'px';
+    document.body.classList.add('nav-dragging','shoot-frozen');
+    drag.slot=slotFor(drag.py);
+    return true;
+  }
+
+  // 根据指针 Y 算目标槽位 k（插入到 others 的第 k 位）。
+  // 参照系用固定的自然位 offs，不能叠加弹簧位移——否则「判定→位移→再判定」会来回震荡。
+  function slotFor(py){
+    var best=drag.others.length;
+    for(var i=0;i<drag.offs.length;i++){
+      if(py<drag.offs[i]+drag.H/2){best=i;break;}
+    }
+    return best;
+  }
+
+  function tick(){
+    if(!drag||!drag.moved){return;}
+    // 目标槽位每帧重算 —— 指针停哪，目标就停哪
+    drag.slot=slotFor(drag.py);
+    // 被拖项浮空跟随：直接 translateY 位移（保留 CSS 里的 scale）
+    var dy=drag.py-drag.startY;
+    drag.btn.style.transform='translateY('+dy+'px) scale(1.06)';
+    // 让位只发生在「原位 origIdx」与「落点 slot」之间的那段，其余项一律回自然位。
+    //   k<origIdx（往上拖）: others 中 [k,origIdx) 段下移 +H
+    //   k>origIdx（往下拖）: others 中 [origIdx,k) 段上移 -H
+    //   k==origIdx（按住不动）: 全部 0 —— 其它项不下移
+    // 全程只改 transform，不碰 DOM 顺序；弹簧逐帧逼近，指针停半路就停半路。
+    var k=drag.slot,o=drag.origIdx,H=drag.H;
+    drag.others.forEach(function(b,i){
+      var target=0;
+      if(k<o&&i>=k&&i<o)target=H;
+      else if(k>o&&i>=o&&i<k)target=-H;
+      var st=drag.springs[i];
+      springStep(st,target);
+      b.style.transform='translateY('+st.x+'px)';
+    });
+    raf=requestAnimationFrame(tick);
+  }
+
+  nav.addEventListener('pointermove',function(e){
+    if(!drag||e.pointerId!==drag.id)return;
+    drag.py=e.clientY;
+    if(!drag.moved){
+      if(Math.abs(e.clientY-drag.startY)<THRESH)return;
+      drag.moved=true;
+      if(!begin()){drag.moved=false;return;}
+      raf=requestAnimationFrame(tick);
+    }
+    if(e.cancelable)e.preventDefault();
+  });
+
+  function endDrag(e){
+    if(!drag||e.pointerId!==drag.id)return;
+    var d=drag;drag=null;cancelAnimationFrame(raf);
+    var moved=d.moved,btn=d.btn;
+    try{if(btn.hasPointerCapture(e.pointerId))btn.releasePointerCapture(e.pointerId);}catch(_){}
+    if(!moved)return;   // 纯点击 → 交给 click 切视图
+    // 先确定最终顺序（去掉被拖项后，插到第 slot 位）
+    var k=d.slot,others=d.others;
+    var newList=others.slice();newList.splice(k,0,btn);
+    // 清浮空态与所有 transform，恢复自然流
+    btn.classList.remove('dragging');
+    btn.style.transform='';btn.style.width='';btn.style.height='';btn.style.left='';btn.style.top='';
+    others.forEach(function(b){b.style.transform='';});
+    if(d.ph&&d.ph.parentNode)d.ph.parentNode.removeChild(d.ph);
+    document.body.classList.remove('nav-dragging');   // shoot-frozen 保留到下次切视图
+    // 一次性重排 DOM 到最终顺序（只移动现有节点，click 绑定保留）
+    newList.forEach(function(b){nav.appendChild(b);});
+    suppressClick=true;
+    setTimeout(function(){suppressClick=false;},0);
+    var order=newList.map(function(b){return b.dataset.go;});
+    S.settings=S.settings||{};S.settings.navOrder=order;save();
+  }
+  nav.addEventListener('pointerup',endDrag);
+  nav.addEventListener('pointercancel',endDrag);
+  nav.addEventListener('click',function(e){
+    if(suppressClick){e.stopPropagation();e.preventDefault();suppressClick=false;}
+  },true);
 })();

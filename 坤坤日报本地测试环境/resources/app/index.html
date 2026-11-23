@@ -95,13 +95,12 @@
         <div class="poster-cap"><b>唱跳 rap 篮球</b><span>练习时长两年半·一个都不能少</span></div>
       </div>
       <div class="nav" id="nav">
-        <button data-go="todos" class="on"><span class="nb"><i class="nball"></i></span>个人计划</button>
-        <button data-go="journal"><span class="nb"><i class="nball"></i></span>工作日报</button>
-        <button data-go="reading"><span class="nb"><i class="nball"></i></span>阅读打卡</button>
-        <button data-go="habits"><span class="nb"><i class="nball"></i></span>每日锻炼</button>
-        <button data-go="ledger"><span class="nb"><i class="nball"></i></span>记账本</button>
-        <button data-go="mood"><span class="nb"><i class="nball"></i></span>心情日记</button>
-        <button data-go="ideas"><span class="nb"><i class="nball"></i></span>灵感墙</button>
+        <button data-go="todos" class="on"><span class="nb"><i class="nball"></i></span><span class="nav-label">个人计划</span><span class="nav-grip" title="按住拖动排序" aria-hidden="true"><svg viewBox="0 0 8 14"><circle cx="2" cy="2" r="1.3"/><circle cx="6" cy="2" r="1.3"/><circle cx="2" cy="7" r="1.3"/><circle cx="6" cy="7" r="1.3"/><circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/></svg></span></button>
+        <button data-go="journal"><span class="nb"><i class="nball"></i></span><span class="nav-label">工作日报</span><span class="nav-grip" title="按住拖动排序" aria-hidden="true"><svg viewBox="0 0 8 14"><circle cx="2" cy="2" r="1.3"/><circle cx="6" cy="2" r="1.3"/><circle cx="2" cy="7" r="1.3"/><circle cx="6" cy="7" r="1.3"/><circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/></svg></span></button>
+        <button data-go="ledger"><span class="nb"><i class="nball"></i></span><span class="nav-label">记账本</span><span class="nav-grip" title="按住拖动排序" aria-hidden="true"><svg viewBox="0 0 8 14"><circle cx="2" cy="2" r="1.3"/><circle cx="6" cy="2" r="1.3"/><circle cx="2" cy="7" r="1.3"/><circle cx="6" cy="7" r="1.3"/><circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/></svg></span></button>
+        <button data-go="mood"><span class="nb"><i class="nball"></i></span><span class="nav-label">心情日记</span><span class="nav-grip" title="按住拖动排序" aria-hidden="true"><svg viewBox="0 0 8 14"><circle cx="2" cy="2" r="1.3"/><circle cx="6" cy="2" r="1.3"/><circle cx="2" cy="7" r="1.3"/><circle cx="6" cy="7" r="1.3"/><circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/></svg></span></button>
+        <button data-go="ideas"><span class="nb"><i class="nball"></i></span><span class="nav-label">灵感墙</span><span class="nav-grip" title="按住拖动排序" aria-hidden="true"><svg viewBox="0 0 8 14"><circle cx="2" cy="2" r="1.3"/><circle cx="6" cy="2" r="1.3"/><circle cx="2" cy="7" r="1.3"/><circle cx="6" cy="7" r="1.3"/><circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/></svg></span></button>
+        <button data-go="tools"><span class="nb"><i class="nball"></i></span><span class="nav-label">小工具</span><span class="nav-grip" title="按住拖动排序" aria-hidden="true"><svg viewBox="0 0 8 14"><circle cx="2" cy="2" r="1.3"/><circle cx="6" cy="2" r="1.3"/><circle cx="2" cy="7" r="1.3"/><circle cx="6" cy="7" r="1.3"/><circle cx="2" cy="12" r="1.3"/><circle cx="6" cy="12" r="1.3"/></svg></span></button>
       </div>
     </div>
     <div class="side-foot">
@@ -224,55 +223,6 @@
       <div class="notes" id="notes"></div>
     </section>
 
-    <!-- 习惯 · 篮球 -->
-    <section class="view" data-view="habits">
-      <div class="hero"><h1 class="ico">每日 <em>锻炼</em>
-        <svg class="hicon hic-lift" viewBox="0 0 34 34" aria-hidden="true"><rect x="10.5" y="15.4" width="13" height="3.2" rx="1.6" fill="#17161F"/><rect x="4.6" y="9.4" width="6" height="15.2" rx="2.4" fill="#46B59A" stroke="#17161F" stroke-width="2"/><rect x="23.4" y="9.4" width="6" height="15.2" rx="2.4" fill="#46B59A" stroke="#17161F" stroke-width="2"/><path d="M6.9 12.4v9M27.1 12.4v9" stroke="rgba(255,255,255,.7)" stroke-width="1.7" stroke-linecap="round"/></svg></h1></div>
-      <div class="panel">
-        <div class="sec-head" style="margin:0 0 4px"><span class="dot"></span><h2>今日打卡</h2>
-          <span class="cnt" id="habCnt">0 / 4</span>
-          <button class="new" id="newHabit" type="button">＋ 新建目标</button></div>
-        <div id="habitList"></div>
-      </div>
-      <div class="duo">
-        <div class="panel snug">
-          <div class="sec-head" style="margin:0 0 10px"><span class="dot"></span><h2>本周完成</h2><span class="cnt" id="habWeek">0 / 28</span></div>
-          <div class="stat-row">
-            <div class="stat-box"><b id="habToday">0</b><span>今天完成</span></div>
-            <div class="stat-box"><b id="habBest">0</b><span>最长连续</span></div>
-            <div class="stat-box"><b id="habRate">0%</b><span>本周打卡率</span></div>
-          </div>
-          <div class="bars" id="habBars"></div>
-          <p class="hintline" id="habTip"></p>
-        </div>
-        <div class="panel snug">
-          <div class="sec-head" style="margin:0 0 10px"><span class="dot"></span><h2>打卡历史</h2><span class="cnt">近 7 天</span></div>
-          <div class="hist-list" id="habHist"></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- 阅读打卡 -->
-    <section class="view" data-view="reading">
-      <div class="hero"><h1 class="ico">阅读 <em>打卡</em>
-        <svg class="hicon hic-books" viewBox="0 0 34 34" aria-hidden="true"><g class="bkb"><rect x="4.5" y="7" width="8" height="21" rx="1.6" fill="#46B59A" stroke="#17161F" stroke-width="2"/><path d="M6.8 12h3.4" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></g><g class="bkb b2"><rect x="13.5" y="5" width="8.6" height="23" rx="1.6" fill="#E8552D" stroke="#17161F" stroke-width="2"/><path d="M15.8 10h4" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></g><g class="bkb b3"><rect x="22.8" y="8.4" width="7" height="19.6" rx="1.6" fill="#B98BE0" stroke="#17161F" stroke-width="2" transform="rotate(7 26.3 18.2)"/></g></svg></h1></div>
-      <div class="panel">
-        <div class="sec-head" style="margin:0 0 12px"><span class="dot"></span><h2>书架</h2>
-          <span class="cnt" id="shelfCnt">0 本</span><button class="new" id="newBook">＋ 加一本</button></div>
-        <div class="shelf" id="shelf"></div>
-      </div>
-      <div class="duo">
-        <div class="panel snug">
-          <div class="sec-head" style="margin:0 0 10px"><span class="dot"></span><h2>阅读打卡</h2><span class="cnt" id="readWeek">0 / 7</span></div>
-          <div class="weekgrid" id="readGrid"></div>
-        </div>
-        <div class="panel snug">
-          <div class="sec-head" style="margin:0 0 10px"><span class="dot"></span><h2>读书历史</h2><span class="cnt">近 7 天</span></div>
-          <div class="hist-list" id="readHist"></div>
-        </div>
-      </div>
-    </section>
-
     <!-- 工作日报 -->
     <section class="view" data-view="journal">
       <div class="hero"><h1 class="ico">工作<em>日报</em>
@@ -329,6 +279,80 @@
       </div>
       <div class="jhist-head"><span class="dot"></span><h2>心情日记</h2><span class="cnt" id="moodLogCnt">0 篇</span></div>
       <div class="jhist" id="moodLog"></div>
+    </section>
+
+    <!-- 小工具：各种小工具的入口抽屉，第一版只有计算器 -->
+    <section class="view" data-view="tools">
+      <div class="tool-stage">
+        <!-- 第一层：工具卡片入口 -->
+        <div class="tool-home" id="toolHome">
+          <div class="hero"><h1 class="ico">小 <em>工具</em>
+            <svg class="hicon hic-toolbox" viewBox="0 0 34 34" aria-hidden="true"><g class="tb">
+              <rect x="3.5" y="12" width="27" height="17" rx="3" fill="#46B59A" stroke="#17161F" stroke-width="2"/>
+              <path d="M3.5 17h27" stroke="#17161F" stroke-width="2"/>
+              <path d="M13 12V9.5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2V12" fill="none" stroke="#17161F" stroke-width="2"/>
+              <rect x="14.5" y="19" width="5" height="4" rx="1" fill="#FCF8EE" stroke="#17161F" stroke-width="1.6"/>
+            </g></svg>
+          </h1></div>
+          <div class="sec-head"><span class="dot"></span><h2>工具箱</h2></div>
+          <div class="tool-grid">
+            <button class="tool-card" type="button" data-tool="calc">
+              <span class="tool-ico">
+                <svg viewBox="0 0 48 48" aria-hidden="true">
+                  <rect x="7" y="4" width="34" height="40" rx="5" fill="#FCF8EE" stroke="#17161F" stroke-width="2.6"/>
+                  <rect x="11" y="8" width="26" height="10" rx="2.5" fill="#CDE9E0" stroke="#17161F" stroke-width="2.2"/>
+                  <path d="M30 11.5h4M30 14.5h4" stroke="#17161F" stroke-width="1.6" stroke-linecap="round"/>
+                  <g fill="#E8552D" stroke="#17161F" stroke-width="2">
+                    <rect x="11" y="22" width="7" height="6" rx="1.6"/><rect x="20.5" y="22" width="7" height="6" rx="1.6"/>
+                    <rect x="30" y="22" width="7" height="6" rx="1.6"/><rect x="11" y="30.5" width="7" height="6" rx="1.6"/>
+                    <rect x="20.5" y="30.5" width="7" height="6" rx="1.6"/>
+                  </g>
+                  <rect x="30" y="30.5" width="7" height="9.5" rx="1.6" fill="#46B59A" stroke="#17161F" stroke-width="2"/>
+                  <g fill="#17161F"><circle cx="14.5" cy="25" r="1.1"/><circle cx="24" cy="25" r="1.1"/><circle cx="33.5" cy="33" r="1.1"/></g>
+                </svg>
+              </span>
+              <span class="tool-name">计算器</span>
+              <span class="tool-desc">加减乘除 · 支持键盘</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 第二层：计算器面板 -->
+        <div class="calc-app" id="calcApp" hidden>
+          <button class="calc-back" id="calcBack" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="#17161F" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            工具箱
+          </button>
+          <div class="calc-machine">
+            <div class="calc-screen">
+              <div class="calc-expr" id="calcExpr">&nbsp;</div>
+              <div class="calc-value" id="calcValue">0</div>
+            </div>
+            <div class="calc-keys" id="calcKeys">
+              <button type="button" class="ck ck-fn" data-k="ac">AC</button>
+              <button type="button" class="ck ck-fn" data-k="sign">+/−</button>
+              <button type="button" class="ck ck-fn" data-k="pct">%</button>
+              <button type="button" class="ck ck-op" data-k="/">÷</button>
+              <button type="button" class="ck" data-k="7">7</button>
+              <button type="button" class="ck" data-k="8">8</button>
+              <button type="button" class="ck" data-k="9">9</button>
+              <button type="button" class="ck ck-op" data-k="*">×</button>
+              <button type="button" class="ck" data-k="4">4</button>
+              <button type="button" class="ck" data-k="5">5</button>
+              <button type="button" class="ck" data-k="6">6</button>
+              <button type="button" class="ck ck-op" data-k="-">−</button>
+              <button type="button" class="ck" data-k="1">1</button>
+              <button type="button" class="ck" data-k="2">2</button>
+              <button type="button" class="ck" data-k="3">3</button>
+              <button type="button" class="ck ck-op" data-k="+">+</button>
+              <button type="button" class="ck ck-zero" data-k="0">0</button>
+              <button type="button" class="ck" data-k=".">.</button>
+              <button type="button" class="ck ck-eq" data-k="=">=</button>
+            </div>
+          </div>
+          <div class="calc-tip">键盘也能按：数字 · + − × ÷<br>Enter 等于 · Backspace 退格 · Esc 清空</div>
+        </div>
+      </div>
     </section>
 
   </main>
@@ -494,6 +518,24 @@
     <button class="jbtn ghost" id="upLater" type="button" title="记住这个版本，自动检查不再提醒；想更新时点设置里的「开团」">先不更新</button>
     <button class="jbtn up-btn" id="upNow" type="button"><span class="up-spin" aria-hidden="true"></span><span id="upNowTxt">下载并更新</span></button>
   </div>
+</div></div>
+
+<!-- 更新回滚提示（上次更新没成功、已换回旧版）：应用内弹窗，取代原生 dialog -->
+<div class="modal-bg" id="failBg"><div class="modal fail-box">
+  <div class="fail-head">
+    <svg class="fail-ico" viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M24 4 L40 10 V24 C40 34 33 41 24 44 C15 41 8 34 8 24 V10 Z" fill="var(--paper)" stroke="var(--ink)" stroke-width="2.5" stroke-linejoin="round"/>
+      <path d="M16 24 L22 30 L33 18" fill="none" stroke="var(--court)" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div>
+      <div class="fail-kicker">UPDATE / 更新</div>
+      <h3 class="fail-title">鸡棚塌了</h3>
+    </div>
+  </div>
+  <div class="fail-msg">这次更新没成功，已经帮你换回原来的版本。</div>
+  <div class="fail-sub">你的数据一点没动，照常用就行。想再试试，点下面的按钮重新下载。</div>
+  <div class="fail-log" id="failLog"></div>
+  <div class="acts"><button class="jbtn ghost" id="failLater" type="button">知道了</button><button class="jbtn" id="failRetry" type="button">再试一次</button></div>
 </div></div>
 <!-- 新版本首次启动：这次更新了什么 -->
 <div class="modal-bg" id="wnBg"><div class="modal wn-box">

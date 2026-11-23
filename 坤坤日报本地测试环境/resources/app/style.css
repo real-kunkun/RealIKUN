@@ -332,8 +332,6 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 /* 标题图标动效（加强版）：只动 transform/opacity/stroke，不参与布局；周期错开避免同频。
    幅度比初版放大约 2~3 倍，节奏也收紧。彩虹三弧仍同步位移（错峰会和硬投影打架出黑缝），
    改用颜色循环流动来提高可见度。 */
-.hero h1 .hic-lift{animation:hicLift 1.5s ease-in-out infinite;transform-origin:50% 62%}
-@keyframes hicLift{0%,100%{transform:translateY(4.6px) rotate(-8deg)}50%{transform:translateY(-5.4px) rotate(8deg)}}
 
 /* 话筒：硬投影只挂在机身，声波弧不带影子也不放大（放大后会糊成紫色色块），
    改为向外平移扩散，左右各两道、相位错开，任意时刻都有波在走。 */
@@ -348,10 +346,6 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 @keyframes micWaveR{0%{opacity:0;transform:translateX(-1px)}30%{opacity:1;transform:translateX(1.5px)}100%{opacity:0;transform:translateX(3.5px)}}
 @keyframes micWaveL{0%{opacity:0;transform:translateX(1px)}30%{opacity:1;transform:translateX(-1.5px)}100%{opacity:0;transform:translateX(-3.5px)}}
 
-.hero h1 .hic-books .bkb{animation:bookBob 1.9s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}
-.hero h1 .hic-books .b2{animation-delay:.22s}
-.hero h1 .hic-books .b3{animation-delay:.44s}
-@keyframes bookBob{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-5.5px) rotate(3.5deg)}}
 
 /* 钱袋：硬投影只挂袋身；金币单独起飞，落差控制在 viewBox 内（飞出上边会被裁成黑月牙） */
 .hero h1 .hic-bag{filter:none}
@@ -697,8 +691,6 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 @keyframes starSpin{0%{transform:scale(0) rotate(-90deg);opacity:0}45%{transform:scale(1.3) rotate(14deg);opacity:1}100%{transform:scale(1) rotate(0);opacity:1}}
 @media (prefers-reduced-motion:reduce){.flip-inner{transition:none}.tcard{transition:none}}
 
-.bar2{flex:1;height:9px;background:var(--mist);border-radius:6px;overflow:hidden;border:1px solid rgba(23,22,31,.15)}
-.bar2 i{display:block;height:100%;background:var(--mint);transition:width .6s cubic-bezier(.4,0,.2,1)}
 .pct{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink)}
 
 /* RAIL：新粗野主义窗口卡（白标题栏 + 淡紫内容区 + 墨黑硬影） */
@@ -831,22 +823,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 
 /* generic panels */
 .panel{background:var(--paper);border:2px solid var(--ink);border-radius:14px;padding:18px;box-shadow:4px 4px 0 rgba(23,22,31,.1);margin-top:16px;animation:rise .4s both}
-.hrow{display:flex;align-items:center;gap:14px;padding:13px 4px;border-bottom:1px dashed var(--mist)}
-.hrow:last-child{border-bottom:none}
-.hrow .ico{font-size:24px}.hrow .nm{font-size:15px;font-weight:600;flex:1}
-.hrow .streak{font-family:var(--mono);font-size:12px;color:var(--soft)}
-.hrow .box{width:30px;height:30px;border:2px solid var(--ink);border-radius:8px;display:grid;place-items:center;font-size:16px;color:#fff;font-weight:700;transition:.18s;background:var(--paper)}
-.hrow .box.on{background:var(--mint);border-color:#2c8576;transform:scale(1.08)}
-.hrow .box:hover{box-shadow:0 0 0 3px rgba(70,181,154,.3)}
-.hrow .box:active{transform:scale(.9)}
 /* 每个目标行的删除：平时很淡，hover 变红，避免误触也避免看不见 */
-.hrow .hdel{flex:0 0 22px;width:22px;height:22px;border-radius:50%;border:2px solid var(--mist);background:none;
-  color:var(--soft);font-size:13px;line-height:1;display:grid;place-items:center;cursor:pointer;
-  opacity:.4;transition:.15s;padding:0;font-family:var(--sans)}
-.hrow:hover .hdel{opacity:1}
-.hrow .hdel:hover{color:var(--danger);border-color:var(--danger);background:rgba(216,57,43,.1)}
-.hrow .hdel:active{transform:scale(.9)}
-.hempty{font-family:var(--hand);font-size:15px;color:var(--ink-3);text-align:center;padding:22px 4px;letter-spacing:.3px}
 .book{display:flex;gap:16px;align-items:center}
 .book .cover{width:74px;height:104px;border-radius:6px;background:linear-gradient(135deg,var(--lilac),var(--court));display:grid;place-items:center;color:#fff;font-family:var(--display);font-weight:700;font-size:13px;text-align:center;padding:8px;flex:0 0 74px;box-shadow:3px 3px 0 var(--ink)}
 .book .info{flex:1}.book .info h4{font-size:17px;font-family:var(--display);font-weight:600}
@@ -869,14 +846,6 @@ textarea.journal{width:100%;min-height:200px;border:2px solid var(--ink);border-
 .hintline{font-family:var(--mono);font-size:11px;color:var(--soft);margin:10px 0 0;line-height:1.5}
 
 /* 锻炼：每项右侧的本周 7 格（格里写星期，打过卡就填成薄荷绿） */
-.hrow .nm b{display:block;font-family:var(--mono);font-size:10px;color:var(--soft);font-weight:400;margin-top:2px}
-.wstrip{display:flex;gap:3px;flex:0 0 auto}
-.wstrip i{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--ink);background:var(--paper);
-  display:grid;place-items:center;font-family:var(--mono);font-size:9px;font-style:normal;line-height:1;
-  color:var(--soft);cursor:pointer;transition:.12s}
-.wstrip i.on{background:var(--mint);color:#0d3b32;font-weight:700}
-.wstrip i.td{box-shadow:0 0 0 2px rgba(232,85,45,.45)}
-.wstrip i:hover{transform:translateY(-2px)}
 /* 14 天柱状 */
 .bars{display:flex;align-items:flex-end;gap:4px;height:62px;margin-top:8px}
 .bars i{flex:1;height:100%;background:rgba(23,22,31,.08);border-radius:3px;position:relative;overflow:hidden}
@@ -892,17 +861,6 @@ textarea.journal{width:100%;min-height:200px;border:2px solid var(--ink);border-
 .hist-row.empty{opacity:.5}
 
 /* 阅读：书架 */
-.shelf{display:flex;flex-direction:column;gap:10px}
-.shelf-item{display:flex;align-items:center;gap:12px;border:2px solid var(--ink);border-radius:12px;padding:10px 12px;
-  background:#fffdf6;cursor:pointer;transition:.14s}
-.shelf-item.on{background:color-mix(in srgb,var(--court) 10%,#fffdf6);box-shadow:3px 3px 0 var(--ink)}
-.shelf-item .cv{width:34px;height:46px;border-radius:4px;flex:0 0 34px;display:grid;place-items:center;
-  color:#fff;font-family:var(--display);font-size:11px;font-weight:700;box-shadow:2px 2px 0 var(--ink);text-align:center;line-height:1.1}
-.shelf-item .mid{flex:1;min-width:0}
-.shelf-item .mid h4{font-family:var(--display);font-size:14px;font-weight:600}
-.shelf-item .mid .pg2{font-family:var(--mono);font-size:11px;color:var(--soft);margin:2px 0 5px}
-.shelf-item .acts{display:flex;gap:6px;flex:0 0 auto}
-.shelf-item .acts .jbtn{padding:5px 10px;font-size:12px}
 
 /* 记账：固定高度，流水内部滚 */
 .led-list{max-height:250px;overflow-y:auto;overflow-x:hidden}
@@ -1428,8 +1386,6 @@ body.no-motion .done-burst .db-star{opacity:1;transform:none}
 @keyframes starSpin{0%{transform:scale(0) rotate(-90deg);opacity:0}45%{transform:scale(1.3) rotate(14deg);opacity:1}100%{transform:scale(1) rotate(0);opacity:1}}
 @media (prefers-reduced-motion:reduce){.flip-inner{transition:none}.tcard{transition:none}}
 
-.bar2{flex:1;height:9px;background:var(--mist);border-radius:6px;overflow:hidden;border:1px solid rgba(23,22,31,.15)}
-.bar2 i{display:block;height:100%;background:var(--mint);transition:width .6s cubic-bezier(.4,0,.2,1)}
 .pct{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink)}
 
 /* RAIL：新粗野主义窗口卡（白标题栏 + 淡紫内容区 + 墨黑硬影） */
@@ -1562,22 +1518,7 @@ body.no-motion .done-burst .db-star{opacity:1;transform:none}
 
 /* generic panels */
 .panel{background:var(--paper);border:2px solid var(--ink);border-radius:14px;padding:18px;box-shadow:4px 4px 0 rgba(23,22,31,.1);margin-top:16px;animation:rise .4s both}
-.hrow{display:flex;align-items:center;gap:14px;padding:13px 4px;border-bottom:1px dashed var(--mist)}
-.hrow:last-child{border-bottom:none}
-.hrow .ico{font-size:24px}.hrow .nm{font-size:15px;font-weight:600;flex:1}
-.hrow .streak{font-family:var(--mono);font-size:12px;color:var(--soft)}
-.hrow .box{width:30px;height:30px;border:2px solid var(--ink);border-radius:8px;display:grid;place-items:center;font-size:16px;color:#fff;font-weight:700;transition:.18s;background:var(--paper)}
-.hrow .box.on{background:var(--mint);border-color:#2c8576;transform:scale(1.08)}
-.hrow .box:hover{box-shadow:0 0 0 3px rgba(70,181,154,.3)}
-.hrow .box:active{transform:scale(.9)}
 /* 每个目标行的删除：平时很淡，hover 变红，避免误触也避免看不见 */
-.hrow .hdel{flex:0 0 22px;width:22px;height:22px;border-radius:50%;border:2px solid var(--mist);background:none;
-  color:var(--soft);font-size:13px;line-height:1;display:grid;place-items:center;cursor:pointer;
-  opacity:.4;transition:.15s;padding:0;font-family:var(--sans)}
-.hrow:hover .hdel{opacity:1}
-.hrow .hdel:hover{color:var(--danger);border-color:var(--danger);background:rgba(216,57,43,.1)}
-.hrow .hdel:active{transform:scale(.9)}
-.hempty{font-family:var(--hand);font-size:15px;color:var(--ink-3);text-align:center;padding:22px 4px;letter-spacing:.3px}
 .book{display:flex;gap:16px;align-items:center}
 .book .cover{width:74px;height:104px;border-radius:6px;background:linear-gradient(135deg,var(--lilac),var(--court));display:grid;place-items:center;color:#fff;font-family:var(--display);font-weight:700;font-size:13px;text-align:center;padding:8px;flex:0 0 74px;box-shadow:3px 3px 0 var(--ink)}
 .book .info{flex:1}.book .info h4{font-size:17px;font-family:var(--display);font-weight:600}
@@ -1600,14 +1541,6 @@ textarea.journal{width:100%;min-height:200px;border:2px solid var(--ink);border-
 .hintline{font-family:var(--mono);font-size:11px;color:var(--soft);margin:10px 0 0;line-height:1.5}
 
 /* 锻炼：每项右侧的本周 7 格（格里写星期，打过卡就填成薄荷绿） */
-.hrow .nm b{display:block;font-family:var(--mono);font-size:10px;color:var(--soft);font-weight:400;margin-top:2px}
-.wstrip{display:flex;gap:3px;flex:0 0 auto}
-.wstrip i{width:16px;height:16px;border-radius:5px;border:1.5px solid var(--ink);background:var(--paper);
-  display:grid;place-items:center;font-family:var(--mono);font-size:9px;font-style:normal;line-height:1;
-  color:var(--soft);cursor:pointer;transition:.12s}
-.wstrip i.on{background:var(--mint);color:#0d3b32;font-weight:700}
-.wstrip i.td{box-shadow:0 0 0 2px rgba(232,85,45,.45)}
-.wstrip i:hover{transform:translateY(-2px)}
 /* 14 天柱状 */
 .bars{display:flex;align-items:flex-end;gap:4px;height:62px;margin-top:8px}
 .bars i{flex:1;height:100%;background:rgba(23,22,31,.08);border-radius:3px;position:relative;overflow:hidden}
@@ -1623,17 +1556,6 @@ textarea.journal{width:100%;min-height:200px;border:2px solid var(--ink);border-
 .hist-row.empty{opacity:.5}
 
 /* 阅读：书架 */
-.shelf{display:flex;flex-direction:column;gap:10px}
-.shelf-item{display:flex;align-items:center;gap:12px;border:2px solid var(--ink);border-radius:12px;padding:10px 12px;
-  background:#fffdf6;cursor:pointer;transition:.14s}
-.shelf-item.on{background:color-mix(in srgb,var(--court) 10%,#fffdf6);box-shadow:3px 3px 0 var(--ink)}
-.shelf-item .cv{width:34px;height:46px;border-radius:4px;flex:0 0 34px;display:grid;place-items:center;
-  color:#fff;font-family:var(--display);font-size:11px;font-weight:700;box-shadow:2px 2px 0 var(--ink);text-align:center;line-height:1.1}
-.shelf-item .mid{flex:1;min-width:0}
-.shelf-item .mid h4{font-family:var(--display);font-size:14px;font-weight:600}
-.shelf-item .mid .pg2{font-family:var(--mono);font-size:11px;color:var(--soft);margin:2px 0 5px}
-.shelf-item .acts{display:flex;gap:6px;flex:0 0 auto}
-.shelf-item .acts .jbtn{padding:5px 10px;font-size:12px}
 
 /* 记账：固定高度，流水内部滚 */
 .led-list{max-height:250px;overflow-y:auto;overflow-x:hidden}
@@ -2327,3 +2249,112 @@ body.no-motion .done-burst .db-star{opacity:1;transform:none}
   -webkit-box-orient:vertical;
   -webkit-line-clamp:3;
 }
+
+/* 更新回滚提示：鸡棚塌了（数据没丢的安抚弹窗），复用 .modal 皮肤，只加内部版式 */
+.fail-box{width:min(430px,90vw);padding:26px 26px 22px}
+.fail-head{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.fail-ico{width:52px;height:52px;flex:0 0 auto;display:block}
+.fail-kicker{font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--soft);margin-bottom:3px}
+.fail-title{font-family:var(--display);font-size:21px;font-weight:700;color:var(--ink);margin:0}
+.fail-msg{font-size:16px;line-height:1.5;color:var(--ink);margin-bottom:8px}
+.fail-sub{font-size:13px;line-height:1.65;color:var(--ink-3);margin-bottom:16px}
+.fail-log{font-family:var(--mono);font-size:11px;color:var(--soft);line-height:1.6;
+  border:2px dashed rgba(23,22,31,.3);border-radius:9px;padding:9px 12px;margin-bottom:20px;white-space:pre-wrap}
+.fail-log:empty{display:none}
+
+/* ═══════════════ 小工具 · 入口 + 计算器 ═══════════════
+   贴产品语言：纸底墨边硬投影、手写体文案、球场橙运算符。
+   两层切换只用 [hidden]（display:none），不进 switchView，侧栏高亮留在「小工具」。 */
+.tool-home[hidden],.calc-app[hidden]{display:none!important}
+.hero h1 .hic-toolbox .tb{animation:toolboxSway 1.9s ease-in-out infinite;transform-origin:50% 70%}
+.hero h1 .hic-toolbox{filter:none}
+.hero h1 .hic-toolbox .tb rect:first-child{filter:drop-shadow(2px 2px 0 rgba(23,22,31,.9))}
+@keyframes toolboxSway{0%,100%{transform:rotate(0)}50%{transform:rotate(-4deg)}}
+
+/* 工具卡片网格 */
+.tool-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:16px;margin-top:4px}
+.tool-card{background:var(--paper);border:2px solid var(--ink);border-radius:14px;padding:20px 16px 18px;
+  box-shadow:4px 4px 0 rgba(23,22,31,.18);display:flex;flex-direction:column;align-items:center;gap:6px;
+  text-align:center;transition:transform .16s ease,box-shadow .16s ease}
+.tool-card:hover{transform:translate(-2px,-3px);box-shadow:7px 8px 0 rgba(23,22,31,.22)}
+.tool-card:active{transform:translate(1px,1px);box-shadow:2px 2px 0 rgba(23,22,31,.18)}
+.tool-ico{width:56px;height:56px;display:block;filter:drop-shadow(2px 2px 0 rgba(23,22,31,.85))}
+.tool-ico svg{width:100%;height:100%;display:block}
+.tool-name{font-family:var(--display);font-size:19px;font-weight:700;color:var(--ink);margin-top:4px}
+.tool-desc{font-family:var(--hand);font-size:14px;color:var(--ink-3)}
+
+/* 计算器面板 */
+.calc-app{animation:rise .34s ease both;max-width:380px;margin:0 auto}
+.calc-back{display:inline-flex;align-items:center;gap:6px;font-size:14px;font-weight:500;color:var(--ink-2);
+  padding:7px 13px 7px 9px;border:2px solid var(--ink);border-radius:20px;background:var(--paper);
+  box-shadow:2px 2px 0 rgba(23,22,31,.18);margin-bottom:16px;transition:transform .14s ease,box-shadow .14s ease}
+.calc-back svg{width:18px;height:18px}
+.calc-back:hover{transform:translate(-1px,-1px);box-shadow:4px 4px 0 rgba(23,22,31,.2)}
+.calc-back:active{transform:translate(1px,1px);box-shadow:1px 1px 0 rgba(23,22,31,.18)}
+.calc-machine{background:var(--cream);border:3px solid var(--ink);border-radius:20px;padding:16px;
+  box-shadow:6px 7px 0 rgba(23,22,31,.9)}
+.calc-screen{background:#12303a;border:2px solid var(--ink);border-radius:11px;padding:12px 16px 14px;
+  min-height:104px;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;
+  box-shadow:inset 0 3px 12px rgba(0,0,0,.45);margin-bottom:14px}
+.calc-expr{font-family:var(--mono);font-size:14px;color:#8fb9bf;letter-spacing:.5px;min-height:18px;
+  width:100%;text-align:right;white-space:nowrap;overflow:hidden}
+.calc-value{font-family:var(--display);font-size:42px;font-weight:700;color:#d8f5ef;line-height:1.05;
+  width:100%;text-align:right;white-space:nowrap;overflow:hidden;letter-spacing:1px}
+.calc-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+.ck{aspect-ratio:1.15/1;border:2px solid var(--ink);border-radius:12px;background:var(--paper);
+  font-family:var(--display);font-size:23px;font-weight:700;color:var(--ink);
+  box-shadow:2px 3px 0 rgba(23,22,31,.85);transition:transform .1s ease,box-shadow .1s ease,background .12s ease;
+  display:flex;align-items:center;justify-content:center;user-select:none}
+.ck:hover{background:#fffdf6}
+.ck:active{transform:translate(2px,3px);box-shadow:0 0 0 rgba(23,22,31,.85)}
+.ck-fn{background:#e8e0cc;font-size:19px}
+.ck-fn:hover{background:#f0e9d8}
+.ck-op{background:var(--court);color:#fff}
+.ck-op:hover{background:var(--court-d)}
+.ck-eq{background:var(--mint);color:#fff}
+.ck-eq:hover{background:#389780}
+.ck-zero{grid-column:span 2;aspect-ratio:auto;text-align:left;padding-left:22px}
+.calc-tip{font-family:var(--hand);font-size:14px;color:var(--ink-3);text-align:center;line-height:1.6;margin-top:16px}
+@media (prefers-reduced-motion:reduce){
+  .hero h1 .hic-toolbox .tb{animation:none}
+  .tool-card,.calc-back,.ck{transition:none}
+}
+
+/* ═══════════════ 侧栏导航拖动排序 ═══════════════
+   整项可拖：按下抬起、跟随落位。只动 transform/opacity/box-shadow，不改宽高 margin。 */
+.nav button{touch-action:none;user-select:none}
+.nav button.dragging{
+  position:relative;z-index:9;cursor:grabbing;
+  background:var(--paper);
+  box-shadow:0 10px 22px -6px rgba(23,22,31,.45),0 0 0 2px var(--court);
+  transform:scale(1.05);opacity:.92;
+  animation:none;
+}
+body.nav-dragging,body.nav-dragging *{cursor:grabbing!important;user-select:none!important}
+@media (prefers-reduced-motion:reduce){.nav button.dragging{transform:none}}
+
+/* 导航手柄：右侧六点，仅在悬停/拖动时显形，平时低调 */
+.nav button{justify-content:flex-start;width:100%}
+.nav-label{flex:0 0 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nav-grip{margin-left:auto;flex:0 0 auto;width:12px;height:20px;display:flex;align-items:center;justify-content:center;
+  opacity:.32;transition:opacity .15s ease;touch-action:none}
+.nav-grip svg{width:8px;height:14px;fill:var(--ink-2)}
+.nav button:hover .nav-grip,.nav button:focus-visible .nav-grip{opacity:.8}
+.nav button.dragging .nav-grip{opacity:1;cursor:grabbing}
+/* 拖动/落位期间冻结投篮动画：篮球安静停在筐里，避免 DOM 移动触发 shoot/net 重播。
+   解冻由 switchView 在真实点击切换时移除 body.shoot-frozen。 */
+body.shoot-frozen .nav button.on .nball{animation:none!important;transform:translateX(0)}
+body.shoot-frozen .nav button.on .nb::after{animation:none!important}
+@media (prefers-reduced-motion:reduce){.nav-grip{transition:none}}
+
+/* 拖动浮空态：被拖项脱离列表、抬起放大加深投影；原位留透明占位保住布局高度 */
+.nav button.dragging{
+  position:absolute;z-index:20;pointer-events:none;
+  background:var(--paper);
+  box-shadow:0 14px 30px -8px rgba(23,22,31,.5),0 0 0 2px var(--court);
+  transform:scale(1.06);transform-origin:center center;
+  opacity:.97;
+}
+.nav-ph{flex:0 0 auto;border:2px dashed rgba(232,85,45,.45);border-radius:10px;
+  background:rgba(232,85,45,.06);transition:height .18s ease}
+@media (prefers-reduced-motion:reduce){.nav-ph{transition:none}}

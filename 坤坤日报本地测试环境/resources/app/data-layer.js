@@ -3,7 +3,9 @@
 // 纯 Node 模块，不依赖 Electron —— 可以单独跑测试
 //
 // 3.0.0 起结构与「练习室」界面完全对齐：
-//   todos / ideas / habits / books / readDays / ledger / moodLog / journals / settings
+//   todos / ideas / ledger / moodLog / journals / settings
+//   注：habits（每日锻炼）/ books + curBook + readDays（阅读打卡）已于界面删除，
+//       字段不再参与归一化；老文件里残留的键读进来后不再写回。
 //   v8 追加：planDays（计划/目标按天归档） / goalLog（目标动态） / lastPlanDay（上次跨天归档日）
 //   注：版本号由用户手动定，SCHEMA_VERSION 保持 8；v8 快照内新增 goals 字段靠 baseNormalize 兼容，无需迁移
 //
@@ -20,19 +22,28 @@ const SCHEMA_VERSION = 8;
 
 const WEEK_CN = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
+// 侧栏导航白名单顺序：归一化只认这些值，脏数据/旧数据一律过滤。
+// 与 index.html 的 [data-go] 一一对应，新增导航项时这里要同步加。
+const NAV_ORDER = ['todos', 'journal', 'ledger', 'mood', 'ideas', 'tools'];
+function normalizeNavOrder(raw) {
+  if (!Array.isArray(raw)) return NAV_ORDER.slice();
+  const seen = {};
+  const out = [];
+  raw.forEach(v => {
+    if (typeof v !== 'string' || NAV_ORDER.indexOf(v) < 0 || seen[v]) return;
+    seen[v] = 1; out.push(v);
+  });
+  // 用户没排过的项（如老用户升级后新增的项）按顺序补到末尾，避免导航项凭空消失
+  NAV_ORDER.forEach(v => { if (!seen[v]) out.push(v); });
+  return out;
+}
+
 const DEFAULT_DATA = {
   // ── 个人计划（四段式轨道：今天 / 短期 / 中期 / 长期）──
   // { t: 标题, k: 'imp'|'daily'|'heavy', note: 备注, done: 是否完成, hor: 'today'|'short'|'mid'|'long' }
   todos: [],
   // 灵感墙
   ideas: [],
-  // 每日锻炼：{ ic: 图标, nm: 名称, hist: { 'YYYY.MM.DD': 1 } }
-  habits: [],
-  // 阅读：{ nm: 书名, cur: 已读章, total: 总章 }
-  books: [],
-  curBook: 0,
-  // 阅读打卡：{ 'YYYY.MM.DD': 1 }
-  readDays: {},
   // 记账：{ d: 说明, a: 金额（支出为负）, ts: 时间戳 }
   ledger: [],
   // 心情日记：{ ts: 时间戳, m: 1~5, t: 正文 }
@@ -52,6 +63,9 @@ const DEFAULT_DATA = {
   // 应用设置（原 reminderSettings.autoStart / closeBehavior.keepRunning 迁移到这里）
   settings: {
     motion: true, autoStart: false, keepRunning: false, seenVersion: '',
+    /* 侧栏导航顺序（手动拖动排序）：合法值数组，空 = 用内置默认顺序。
+       baseNormalize 每次从 DEFAULT_DATA 重建，这里漏写就会「保存一次就蒸发」。 */
+    navOrder: [],
     /* 久坐提醒：开启后主进程按 intervalMin 循环计时，到点弹起身卡。
        计时状态只在主进程内存里，重启从满间隔重来，所以这里只存配置。 */
     standup: { enabled: false, intervalMin: 45 }
@@ -180,35 +194,6 @@ function normalizeIdea(raw) {
   return { t: str(o.t).slice(0, 1000) };
 }
 
-function normalizeHabit(raw) {
-  const o = isObj(raw) ? raw : {};
-  const hist = {};
-  if (isObj(o.hist)) {
-    Object.keys(o.hist).forEach(k => { if (/^\d{4}\.\d{2}\.\d{2}$/.test(k) && o.hist[k]) hist[k] = 1; });
-  }
-  return {
-    ic: str(o.ic, '🏀').slice(0, 8) || '🏀',
-    nm: str(o.nm, '锻炼').slice(0, 40) || '锻炼',
-    hist: hist
-  };
-}
-
-function normalizeBook(raw, idx) {
-  const o = isObj(raw) ? raw : {};
-  const total = Math.max(0, Math.floor(num(o.total, 0)));
-  const cur = Math.max(0, Math.floor(num(o.cur, 0)));
-  // id 是书架的稳定标识（curBook 存的是 id 不是下标），丢了会让"当前在读"错位
-  const id = (typeof o.id === 'number' || (typeof o.id === 'string' && o.id)) ? o.id : (idx + 1);
-  const cv = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(str(o.cv)) ? str(o.cv) : '#E8552D';
-  return {
-    id: id,
-    nm: str(o.nm, '未命名').slice(0, 60) || '未命名',
-    cur: total ? Math.min(cur, total) : cur,
-    total: total,
-    cv: cv
-  };
-}
-
 function normalizeLedger(raw) {
   const o = isObj(raw) ? raw : {};
   const a = num(o.a, 0);
@@ -238,15 +223,6 @@ function normalizeJournal(raw) {
   };
 }
 
-// 日期键表（readDays）：只保留合法键
-function normalizeDayMap(raw) {
-  const out = {};
-  if (isObj(raw)) {
-    Object.keys(raw).forEach(k => { if (/^\d{4}\.\d{2}\.\d{2}$/.test(k) && raw[k]) out[k] = 1; });
-  }
-  return out;
-}
-
 // ── 根结构归一化（每一版都会跑，幂等） ────────────────────
 function baseNormalize(raw) {
   const d = JSON.parse(JSON.stringify(DEFAULT_DATA));
@@ -254,17 +230,6 @@ function baseNormalize(raw) {
 
   if (Array.isArray(src.todos)) d.todos = src.todos.map(normalizeTodo).filter(t => t.t);
   if (Array.isArray(src.ideas)) d.ideas = src.ideas.map(normalizeIdea).filter(i => i.t);
-  if (Array.isArray(src.habits)) d.habits = src.habits.map(normalizeHabit);
-  if (Array.isArray(src.books)) d.books = src.books.map((b, i) => normalizeBook(b, i));
-  // curBook 存的是书的 id：找不到就退回第一本
-  if (d.books.length) {
-    const want = num(src.curBook, null);
-    const has = d.books.some(b => b.id === want);
-    d.curBook = has ? want : d.books[0].id;
-  } else {
-    d.curBook = 0;
-  }
-  d.readDays = normalizeDayMap(src.readDays);
   if (Array.isArray(src.ledger)) d.ledger = src.ledger.map(normalizeLedger);
   if (Array.isArray(src.moodLog)) d.moodLog = src.moodLog.map(normalizeMood);
   d.moodPick = Math.min(5, Math.max(0, Math.floor(num(src.moodPick, 0))));
@@ -292,6 +257,7 @@ function baseNormalize(raw) {
     autoStart: st.autoStart === true,
     keepRunning: st.keepRunning === true,
     seenVersion: str(st.seenVersion),
+    navOrder: normalizeNavOrder(st.navOrder),
     standup: { enabled: su.enabled === true, intervalMin: suMin }
   };
 
@@ -405,8 +371,6 @@ function countsOf(data) {
   return {
     todos: Array.isArray(d.todos) ? d.todos.length : 0,
     ideas: Array.isArray(d.ideas) ? d.ideas.length : 0,
-    habits: Array.isArray(d.habits) ? d.habits.length : 0,
-    books: Array.isArray(d.books) ? d.books.length : 0,
     ledger: Array.isArray(d.ledger) ? d.ledger.length : 0,
     moods: Array.isArray(d.moodLog) ? d.moodLog.length : 0,
     journals: Array.isArray(d.journals) ? d.journals.length : 0,
@@ -464,11 +428,11 @@ module.exports = {
   WEEK_CN,
   detectSchema,
   countsOf,
+  NAV_ORDER,
+  normalizeNavOrder,
   baseNormalize,
   applyMigrations,
   normalizeTodo,
-  normalizeHabit,
-  normalizeBook,
   normalizeLedger,
   normalizeMood,
   normalizeJournal,

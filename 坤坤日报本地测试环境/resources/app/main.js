@@ -120,27 +120,25 @@ function markBootOk() {
   try { fs.writeFileSync(BOOT_OK_FLAG, String(Date.now()), 'utf8'); } catch (e) { }
 }
 
-// 上次更新被批处理回滚了 → 首次启动时告诉用户，然后抹掉标记（只提示一次）
+// 上次更新被批处理回滚了 → 首次启动时告诉用户，然后抹掉标记（只提示一次）。
+// 3.0.3 起交给渲染层用应用内弹窗显示（原生 dialog 跟漫画风完全两套语言）。
+// 必须等渲染层注册好 onUpdateRollback 监听才推：用 did-finish-load + 延迟兜底。
 function reportUpdateRollback() {
   try {
     if (!fs.existsSync(UPDATE_FAIL_FLAG)) return;
     let info = '';
     try { info = (fs.readFileSync(UPDATE_FAIL_FLAG, 'utf8') || '').trim(); } catch (e) { }
     try { fs.unlinkSync(UPDATE_FAIL_FLAG); } catch (e) { }
-    setTimeout(() => {
+    const send = () => {
       try {
-        dialog.showMessageBox({
-          type: 'warning',
-          title: '更新未完成',
-          message: '上次更新没成功，已经自动换回你原来的版本',
-          detail: '你的数据没有受影响，可以正常使用。\n' +
-            '想再试一次就点「检查更新」重新下载。\n' +
-            (info ? '\n失败记录：' + info : ''),
-          buttons: ['知道了'],
-          noLink: true
-        });
+        if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isLoading()) {
+          mainWindow.webContents.send('update-rollback', { info: info });
+        } else {
+          setTimeout(send, 400);   // 页面还没加载完，稍后再试
+        }
       } catch (e) { }
-    }, 900);
+    };
+    setTimeout(send, 900);
   } catch (e) { }
 }
 

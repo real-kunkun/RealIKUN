@@ -35,5 +35,6 @@ contextBridge.exposeInMainWorld('todoAPI', {
   skipUpdate: (version) => ipcRenderer.invoke('skip-update', version),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   onUpdateAvailable: (callback) => ipcRenderer.on('update-available', (e, payload) => callback(payload)),
-  onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (e, payload) => callback(payload))
+  onUpdateProgress: (callback) => ipcRenderer.on('update-progress', (e, payload) => callback(payload)),
+  onUpdateRollback: (callback) => ipcRenderer.on('update-rollback', (e, payload) => callback(payload))
 });
